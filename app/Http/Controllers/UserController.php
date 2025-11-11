@@ -6,8 +6,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-
-// Use JWT facade (tymon or php-open-source-saver)
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 
@@ -23,6 +21,7 @@ class UserController extends Controller
 
     /**
      * Register - tạo user mới và trả token JWT
+     * Luôn gán role = 'user' (bảo mật) — ignore role từ client.
      */
     public function register(Request $request)
     {
@@ -31,6 +30,7 @@ class UserController extends Controller
                 'name'     => 'required|string|max:255',
                 'email'    => 'required|email|unique:users,email',
                 'password' => 'required|string|min:6',
+                'phone'    => 'nullable|string|max:30',
             ]);
 
             Log::info('Registering user: ' . $data['email']);
@@ -39,6 +39,9 @@ class UserController extends Controller
                 'name'     => $data['name'],
                 'email'    => $data['email'],
                 'password' => bcrypt($data['password']),
+                'phone'    => $data['phone'] ?? null,
+                'role'     => 'user',   // IMPORTANT: public register luôn là 'user'
+                'status'   => 1,
             ]);
 
             Log::info('User registered with ID: ' . $user->id);
@@ -66,6 +69,45 @@ class UserController extends Controller
     }
 
     /**
+     * Admin-only: tạo user (admin có thể truyền role: 'admin' hoặc 'user')
+     * Route nên được bảo vệ bằng auth middleware.
+     */
+    public function createByAdmin(Request $request)
+    {
+        try {
+            $authUser = $request->user();
+            if (!$authUser || ($authUser->role ?? '') !== 'admin') {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
+            $data = $request->validate([
+                'name'     => 'required|string|max:255',
+                'email'    => 'required|email|unique:users,email',
+                'password' => 'required|string|min:6',
+                'phone'    => 'nullable|string|max:30',
+                'role'     => 'nullable|string|in:user,admin',
+                'status'   => 'nullable|integer',
+            ]);
+
+            $user = User::create([
+                'name'     => $data['name'],
+                'email'    => $data['email'],
+                'password' => bcrypt($data['password']),
+                'phone'    => $data['phone'] ?? null,
+                'role'     => $data['role'] ?? 'user',
+                'status'   => $data['status'] ?? 1,
+            ]);
+
+            return response()->json(['message' => 'User created by admin', 'user' => $user], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => 'Validation failed', 'errors' => $e->errors()], 422);
+        } catch (\Throwable $e) {
+            Log::error('createByAdmin error: '.$e->getMessage());
+            return response()->json(['message' => 'Server error'], 500);
+        }
+    }
+
+    /**
      * Login - nhận email + password, trả token nếu đúng
      */
     public function login(Request $request)
@@ -75,7 +117,6 @@ class UserController extends Controller
             'password' => 'required|string|min:6',
         ]);
 
-        // Thử dùng auth('api')->attempt
         try {
             $guard = auth('api');
             $token = null;
@@ -84,17 +125,15 @@ class UserController extends Controller
                 $token = $guard->attempt($credentials);
             }
 
-            // fallback to JWTAuth
             if (!$token) {
                 $token = JWTAuth::attempt($credentials);
             }
 
-            if (! $token) {
+            if (!$token) {
                 return response()->json(['message' => 'Email hoặc mật khẩu không đúng'], 401);
             }
 
             return $this->respondWithToken($token);
-
         } catch (JWTException $e) {
             Log::error('JWT Exception on login: '.$e->getMessage());
             return response()->json(['message' => 'Lỗi khi tạo token'], 500);
@@ -109,26 +148,26 @@ class UserController extends Controller
      */
     public function logout(Request $request)
     {
-        // try {
-        //     $guard = auth('api');
+        try {
+            // Prefer guard logout if available
+            $guard = auth('api');
+            if (is_object($guard) && method_exists($guard, 'logout')) {
+                $guard->logout();
+            } else {
+                $token = JWTAuth::getToken();
+                if ($token) {
+                    JWTAuth::invalidate($token);
+                }
+            }
 
-        //     if (is_object($guard) && method_exists($guard, 'logout')) {
-        //         $guard->logout();
-        //     } else {
-        //         $token = JWTAuth::getToken();
-        //         if ($token) {
-        //             JWTAuth::invalidate($token);
-        //         }
-        //     }
-
-        //     return response()->json(['message' => 'Đã đăng xuất']);
-        // } catch (JWTException $e) {
-        //     Log::error('JWT logout error: '.$e->getMessage());
-        //     return response()->json(['message' => 'Lỗi khi logout'], 500);
-        // } catch (\Throwable $e) {
-        //     Log::error('Logout error: '.$e->getMessage());
-        //     return response()->json(['message' => 'Lỗi server'], 500);
-        // }
+            return response()->json(['message' => 'Đã đăng xuất']);
+        } catch (JWTException $e) {
+            Log::error('JWT logout error: '.$e->getMessage());
+            return response()->json(['message' => 'Lỗi khi logout'], 500);
+        } catch (\Throwable $e) {
+            Log::error('Logout error: '.$e->getMessage());
+            return response()->json(['message' => 'Lỗi server'], 500);
+        }
     }
 
     /**
@@ -136,39 +175,34 @@ class UserController extends Controller
      */
     public function refresh()
     {
-        // try {
-        //     $guard = auth('api');
-
-        //     if (is_object($guard) && method_exists($guard, 'refresh')) {
-        //         $newToken = $guard->refresh();
-        //     } else {
-        //         $newToken = JWTAuth::refresh();
-        //     }
-
-        //     return $this->respondWithToken($newToken);
-        // } catch (JWTException $e) {
-        //     Log::error('JWT refresh error: '.$e->getMessage());
-        //     return response()->json(['message' => 'Lỗi khi refresh token'], 500);
-        // } catch (\Throwable $e) {
-        //     Log::error('Refresh error: '.$e->getMessage());
-        //     return response()->json(['message' => 'Lỗi server'], 500);
-        // }
+        try {
+            $guard = auth('api');
+            if (is_object($guard) && method_exists($guard, 'refresh')) {
+                $newToken = $guard->refresh();
+            } else {
+                $newToken = JWTAuth::refresh();
+            }
+            return $this->respondWithToken($newToken);
+        } catch (JWTException $e) {
+            Log::error('JWT refresh error: '.$e->getMessage());
+            return response()->json(['message' => 'Lỗi khi refresh token'], 500);
+        } catch (\Throwable $e) {
+            Log::error('Refresh error: '.$e->getMessage());
+            return response()->json(['message' => 'Lỗi server'], 500);
+        }
     }
 
     /**
      * Thông tin user hiện tại
      */
-    public function me()
+    public function me(Request $request)
     {
         try {
-            $guard = auth('api');
-
-            if (is_object($guard) && method_exists($guard, 'user')) {
-                $user = $guard->user();
-            } else {
+            // prefer $request->user()
+            $user = $request->user();
+            if (!$user) {
                 $user = JWTAuth::user();
             }
-
             return response()->json($user);
         } catch (\Throwable $e) {
             Log::error('Me error: '.$e->getMessage());

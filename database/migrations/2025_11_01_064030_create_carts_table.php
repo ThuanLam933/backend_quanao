@@ -13,11 +13,21 @@ return new class extends Migration
     {
         Schema::create('carts', function (Blueprint $table) {
             $table->id();
-            $table->decimal('Total_price');
-            $table->foreignId('user_id')
-                ->constrained()
-                ->onDelete('cascade');
+
+            // Total_price với precision và default để tránh lỗi tính toán
+            $table->decimal('Total_price', 12, 2)->default(0);
+
+            // user_id nullable — cho phép guest cart
+            $table->unsignedBigInteger('user_id')->nullable();
+
+            // timestamps
             $table->timestamps();
+
+            // foreign key: nếu user bị xóa -> set NULL (giữ cart guest)
+            $table->foreign('user_id')
+                ->references('id')
+                ->on('users')
+                ->onDelete('set null');
         });
     }
 

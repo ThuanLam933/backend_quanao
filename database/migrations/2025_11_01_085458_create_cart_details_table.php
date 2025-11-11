@@ -13,16 +13,24 @@ return new class extends Migration
     {
         Schema::create('cart_details', function (Blueprint $table) {
             $table->id();
+
             $table->foreignId('product_detail_id')
                 ->constrained()
                 ->onDelete('cascade');
+
             $table->foreignId('cart_id')
                 ->constrained()
                 ->onDelete('cascade');
-            $table->integer('quantity');
-            $table->decimal('price');
-            $table->decimal('subtotal');
-            $table->text('note');
+
+            $table->integer('quantity')->default(1);
+
+            // Price and subtotal with precision
+            $table->decimal('price', 12, 2)->default(0);
+            $table->decimal('subtotal', 12, 2)->default(0);
+
+            // note nullable (guest may not send a note)
+            $table->text('note')->nullable();
+
             $table->timestamps();
         });
     }
