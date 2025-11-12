@@ -37,9 +37,9 @@ Route::post('/login', [UserController::class, 'login']);
 
 // Public data endpoints
 Route::get('/products', [ProductController::class, 'products']);
-    Route::post('/products',  [ProductController::class, 'addProduct']);
-    Route::put('/products/{id}', [ProductController::class, 'update'] ?? function(){});
-    Route::delete('/products/{id}', [ProductController::class, 'destroy'] ?? function(){});
+Route::post('/products',  [ProductController::class, 'addProduct']);
+Route::post('/products/{id}', [ProductController::class, 'update'] ?? function(){});
+Route::delete('/products/{id}', [ProductController::class, 'destroy'] ?? function(){});
 Route::get('/product-details', [ProductDetailController::class, 'index']);
 Route::get('/product-details/{id}', [ProductDetailController::class, 'show']);
 

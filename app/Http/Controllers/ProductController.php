@@ -263,81 +263,185 @@ class ProductController extends Controller
      * Accepts: POST with _method=PUT + FormData OR real PUT JSON
      */
     public function update(Request $request, $id)
-    {
-        Log::info('updateProduct called', ['id' => $id, 'path' => $request->path(), 'method' => $request->method()]);
+{
+    Log::info('updateProduct called', ['id' => $id, 'path' => $request->path(), 'method' => $request->method()]);
+    $payload = $request->except(['image', 'images']);
+    Log::debug('Update payload (except files)', $payload);
 
-        $payload = $request->except(['image', 'images']);
-        Log::debug('Update payload (except files)', $payload);
+    try {
+        $product = Product::findOrFail($id);
 
-        try {
-            $product = Product::findOrFail($id);
+        $validated = $request->validate([
+            'name'          => 'sometimes|required|string|max:255',
+            'slug'          => 'nullable|string|max:255',
+            'description'   => 'sometimes|required|string',
+            'status'        => 'sometimes|required|boolean',
+            'categories_id' => 'sometimes|required|exists:categories,id',
+            'image'         => 'sometimes|file|image|max:5120',
+            'images'        => 'sometimes|array',
+            'images.*'      => 'file|image|max:5120',
+            'image_url'     => 'sometimes|nullable|string|max:2048',
+            // details is intentionally loose; we'll validate each item later
+            'details'       => 'sometimes',
+            'deleted_detail_ids' => 'sometimes|array',
+            'deleted_detail_ids.*' => 'integer',
+        ]);
 
-            $validated = $request->validate([
-                'name'          => 'sometimes|required|string|max:255',
-                'slug'          => 'nullable|string|max:255',
-                'description'   => 'sometimes|required|string',
-                'status'        => 'sometimes|required|boolean',
-                'categories_id' => 'sometimes|required|exists:categories,id',
-                'image'         => 'sometimes|file|image|max:5120',
-                'images'        => 'sometimes|array',
-                'images.*'      => 'file|image|max:5120',
-                'image_url'     => 'sometimes|nullable|string|max:2048',
-            ]);
-
-            // If slug empty but name provided, regenerate slug
-            if (isset($validated['slug']) && $validated['slug'] !== null && $validated['slug'] !== '') {
-                $base = Str::slug($validated['slug']);
-                $slug = $base ?: Str::slug($validated['name'] ?? $product->name);
-                $i = 1;
-                while (Product::where('slug', $slug)->where('id', '<>', $product->id)->exists()) {
-                    $slug = $base . '-' . $i++;
-                }
-                $validated['slug'] = $slug;
-            } elseif (isset($validated['name']) && (!isset($validated['slug']) || $validated['slug'] === '')) {
-                // generate slug from name if slug not provided
-                $base = Str::slug($validated['name']);
-                $slug = $base ?: 'p-' . time();
-                $i = 1;
-                while (Product::where('slug', $slug)->where('id', '<>', $product->id)->exists()) {
-                    $slug = $base . '-' . $i++;
-                }
-                $validated['slug'] = $slug;
+        // Slug handling: ensure unique excluding current product
+        if (isset($validated['slug']) && $validated['slug'] !== null && $validated['slug'] !== '') {
+            $base = Str::slug($validated['slug']);
+            $slug = $base ?: Str::slug($validated['name'] ?? $product->name);
+            $i = 1;
+            while (Product::where('slug', $slug)->where('id', '<>', $product->id)->exists()) {
+                $slug = $base . '-' . $i++;
             }
-
-            // Handle uploaded images: set first to image_url
-            if ($request->hasFile('images') && is_array($request->file('images'))) {
-                $files = $request->file('images');
-                if (count($files) > 0) {
-                    $first = $files[0];
-                    $path = $first->store('products', 'public');
-                    $validated['image_url'] = $path;
-                    Log::info('Images[] uploaded (update), first stored', ['path' => $path]);
-                }
-            } elseif ($request->hasFile('image')) {
-                $path = $request->file('image')->store('products', 'public');
-                $validated['image_url'] = $path;
-                Log::info('Single image uploaded (update)', ['path' => $path]);
+            $validated['slug'] = $slug;
+        } elseif (isset($validated['name']) && (!isset($validated['slug']) || $validated['slug'] === '')) {
+            // generate slug from name if slug not provided
+            $base = Str::slug($validated['name']);
+            $slug = $base ?: 'p-' . time();
+            $i = 1;
+            while (Product::where('slug', $slug)->where('id', '<>', $product->id)->exists()) {
+                $slug = $base . '-' . $i++;
             }
-
-            // update only validated fields
-            $product->fill($validated);
-            $product->save();
-
-            $product->image_url = $product->image_url ? asset('storage/' . ltrim($product->image_url, '/')) : null;
-
-            Log::info('Product updated', ['id' => $product->id]);
-
-            return response()->json(['message' => 'Cập nhật thành công', 'product' => $product]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::warning('Validation failed while updating product', $e->errors());
-            return response()->json(['message' => 'Validation failed', 'errors' => $e->errors()], 422);
-        } catch (\Throwable $e) {
-            Log::error('UpdateProduct error: ' . $e->getMessage());
-            Log::error($e->getTraceAsString());
-            Log::error('Last known payload', $payload);
-            return response()->json(['message' => 'Lỗi server'], 500);
+            $validated['slug'] = $slug;
         }
+
+        // Handle uploaded images: set first to image_url
+        if ($request->hasFile('images') && is_array($request->file('images'))) {
+            $files = $request->file('images');
+            if (count($files) > 0) {
+                $first = $files[0];
+                $path = $first->store('products', 'public');
+                $validated['image_url'] = $path;
+                Log::info('Images[] uploaded (update), first stored', ['path' => $path]);
+            }
+        } elseif ($request->hasFile('image')) {
+            $path = $request->file('image')->store('products', 'public');
+            $validated['image_url'] = $path;
+            Log::info('Single image uploaded (update)', ['path' => $path]);
+        }
+
+        DB::beginTransaction();
+
+        // Update product fields
+        $product->fill($validated);
+        $product->save();
+
+        // --- Handle details if provided ---
+        $detailsInput = $request->input('details', null);
+
+        if ($detailsInput !== null) {
+            // If details is JSON string (multipart), decode it
+            if (is_string($detailsInput) && $detailsInput !== '') {
+                $decoded = json_decode($detailsInput, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $detailsInput = $decoded;
+                } else {
+                    Log::warning('Invalid JSON in details field (update)', ['raw' => $detailsInput]);
+                    $detailsInput = [];
+                }
+            }
+
+            // If details is not array, normalize to empty array
+            if (!is_array($detailsInput)) {
+                $detailsInput = [];
+            }
+
+            $processedIds = [];
+
+            foreach ($detailsInput as $idx => $dRaw) {
+                $d = is_array($dRaw) ? $dRaw : [];
+
+                $v = Validator::make($d, [
+                    'id' => 'sometimes|integer|exists:product_details,id',
+                    'price' => 'nullable|numeric',
+                    'color_id' => 'nullable|exists:colors,id',
+                    'size_id'  => 'nullable|exists:sizes,id',
+                    'quantity' => 'nullable|integer',
+                    'image_url' => 'sometimes|nullable|string|max:2048',
+                ]);
+
+                if ($v->fails()) {
+                    DB::rollBack();
+                    Log::warning('Detail validation failed (update)', ['index' => $idx, 'errors' => $v->errors()->toArray()]);
+                    return response()->json(['message' => 'Validation failed for product details', 'errors' => $v->errors()], 422);
+                }
+
+                $detailData = [
+                    'price' => array_key_exists('price', $d) ? $d['price'] : null,
+                    'color_id' => $d['color_id'] ?? null,
+                    'size_id'  => $d['size_id'] ?? null,
+                    'quantity' => $d['quantity'] ?? 0,
+                    'image_url' => $d['image_url'] ?? null,
+                ];
+
+                // If id provided and belongs to this product => update
+                if (!empty($d['id'])) {
+                    $detail = $product->details()->where('id', $d['id'])->first();
+                    if ($detail) {
+                        $detail->update($detailData);
+                        $processedIds[] = $detail->id;
+                    } else {
+                        // id provided but not found on this product: skip or create new (we skip)
+                        Log::warning('Detail id provided but not found for this product (update)', ['detail_id' => $d['id'], 'product_id' => $product->id]);
+                    }
+                } else {
+                    // create new detail
+                    $new = $product->details()->create($detailData);
+                    $processedIds[] = $new->id;
+                }
+            }
+
+            // Handle explicit deletions: deleted_detail_ids[]
+            $deleted = $request->input('deleted_detail_ids', []);
+            if (is_array($deleted) && count($deleted) > 0) {
+                $toDelete = $product->details()->whereIn('id', $deleted)->pluck('id')->toArray();
+                if (count($toDelete) > 0) {
+                    $product->details()->whereIn('id', $toDelete)->delete();
+                }
+            }
+
+            // Optionally: if frontend wants a full replace (all details replaced by provided list),
+            // they can send 'replace_details' = true. In that case, delete details not in processedIds.
+            if ($request->boolean('replace_details') && count($processedIds) > 0) {
+                $product->details()->whereNotIn('id', $processedIds)->delete();
+            }
+        }
+
+        DB::commit();
+
+        // reload relations and normalize urls
+        $product->load('details.color','details.size');
+        $product->image_url = $product->image_url ? asset('storage/' . ltrim($product->image_url, '/')) : null;
+
+        if ($product->relationLoaded('details') && $product->details) {
+            $product->details = $product->details->map(function($d){
+                if (isset($d->image_url) && $d->image_url) {
+                    $d->image_url = asset('storage/' . ltrim($d->image_url, '/'));
+                }
+                return $d;
+            })->toArray();
+        } else {
+            $product->details = [];
+        }
+
+        Log::info('Product updated', ['id' => $product->id]);
+
+        return response()->json(['message' => 'Cập nhật thành công', 'product' => $product]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        DB::rollBack();
+        Log::warning('Validation failed while updating product', $e->errors());
+        return response()->json(['message' => 'Validation failed', 'errors' => $e->errors()], 422);
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        Log::error('UpdateProduct error: ' . $e->getMessage());
+        Log::error($e->getTraceAsString());
+        Log::error('Last known payload', $payload);
+        return response()->json(['message' => 'Lỗi server'], 500);
     }
+}
+
 
     /**
      * Xoá product
