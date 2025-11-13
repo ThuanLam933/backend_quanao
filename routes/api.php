@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductDetailController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CartDetailController;
 use App\Http\Controllers\ImageProductController;
+use App\Http\Controllers\OrderController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -73,6 +74,7 @@ Route::post('/cart-details', [CartDetailController::class, 'store']);
 Route::put('/cart-details/{id}', [CartDetailController::class, 'update']);
 Route::delete('/cart-details/{id}', [CartDetailController::class, 'destroy']);
 
+
 /*
 |--------------------------------------------------------------------------
 | AUTHENTICATED ROUTES (auth:api)
@@ -84,6 +86,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);
     Route::post('/refresh', [UserController::class, 'refresh']);
     Route::get('/me', [UserController::class, 'me']);
+    // trong group auth:api
+Route::match(['put','patch'], '/me', [UserController::class, 'updateMe']);
 
     // Product details (authenticated can create/update/delete if you want)
     Route::post('/product-details', [ProductDetailController::class, 'store']);
@@ -99,6 +103,12 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/sizes/{id}', [SizeController::class, 'update']);
     Route::delete('/sizes/{id}', [SizeController::class, 'destroy']);
 
+    Route::post('/orders', [OrderController::class, 'store']);
+     Route::get('/orders/{id}', [OrderController::class, 'show']); // owner hoặc admin (controller đã check)
+    // admin only endpoints (controller kiểm tra)
+    Route::get('/orders', [OrderController::class, 'index']); // admin list
+    Route::put('/orders/{id}', [OrderController::class, 'update']);
+    Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
     // If you want carts / cart-details only for logged-in users:
     // uncomment these and remove the public ones above.
     // Route::post('/carts', [CartController::class, 'store']);
@@ -123,6 +133,7 @@ Route::middleware(['auth:api', 'is_admin'])->prefix('admin')->group(function () 
     Route::post('/users', [UserController::class, 'createByAdmin']); // create user with role
     Route::put('/users/{id}', [UserController::class, 'updateByAdmin'] ?? [UserController::class, 'update']); // implement if available
     Route::delete('/users/{id}', [UserController::class, 'destroy'] ?? function($id){ return response()->json(['message'=>'Not implemented'],501); });
+    
 
     // Product management (full CRUD)
 
@@ -132,11 +143,10 @@ Route::middleware(['auth:api', 'is_admin'])->prefix('admin')->group(function () 
     Route::put('/categories/{id}', [CategoriesController::class, 'update'] ?? function(){});
     Route::delete('/categories/{id}', [CategoriesController::class, 'destroy'] ?? function(){});
 
-
-
     // Orders / Returns / Stock / Comments endpoints (admin)
     // Add controllers for returns/stock/comments if exist
     Route::get('/orders', [CartController::class, 'index']);
     Route::put('/orders/{id}', [CartController::class, 'update']);
     // returns, stock-entries, comments: if you implement controllers, add them here
+    
 });

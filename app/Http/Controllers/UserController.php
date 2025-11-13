@@ -23,14 +23,50 @@ class UserController extends Controller
      * Register - tạo user mới và trả token JWT
      * Luôn gán role = 'user' (bảo mật) — ignore role từ client.
      */
+    public function updateMe(Request $request)
+{
+    try {
+        $user = $request->user() ?? JWTAuth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $data = $request->only(['name', 'email', 'phone']);
+
+        $rules = [
+            'name'  => 'sometimes|string|max:255',
+            'email' => 'sometimes|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'sometimes|string|max:30',
+        ];
+
+        $validated = \Illuminate\Support\Facades\Validator::make($data, $rules);
+
+        if ($validated->fails()) {
+            return response()->json(['message' => 'Validation failed', 'errors' => $validated->errors()], 422);
+        }
+
+        $vals = $validated->validated();
+
+        
+
+        $user->fill($vals);
+        $user->save();
+
+        return response()->json($user, 200);
+    } catch (\Throwable $e) {
+        \Log::error('updateMe error: '.$e->getMessage());
+        return response()->json(['message' => 'Server error'], 500);
+    }
+}
+
     public function register(Request $request)
     {
         try {
             $data = $request->validate([
                 'name'     => 'required|string|max:255',
+                'phone'    => 'nullable|string|max:30',
                 'email'    => 'required|email|unique:users,email',
                 'password' => 'required|string|min:6',
-                'phone'    => 'nullable|string|max:30',
             ]);
 
             Log::info('Registering user: ' . $data['email']);
@@ -209,6 +245,7 @@ class UserController extends Controller
             return response()->json(['message' => 'Lỗi server'], 500);
         }
     }
+    
 
     /**
      * Helper: trả token với metadata
