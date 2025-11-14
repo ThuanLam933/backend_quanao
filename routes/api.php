@@ -32,7 +32,10 @@ Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 Route::get('/product-details', [ProductDetailController::class, 'index']);
 Route::get('/product-details/{id}', [ProductDetailController::class, 'show']);
 
+// Categories (public read)
 Route::get('/categories', [CategoriesController::class, 'index']);
+Route::get('/categories/{id}', [CategoriesController::class, 'show']);
+
 Route::get('/colors', [ColorController::class, 'index']);
 Route::get('/colors/{id}', [ColorController::class, 'show']);
 Route::get('/sizes', [SizeController::class, 'index']);
@@ -49,6 +52,10 @@ Route::delete('/image-products/{id}', [ImageProductController::class, 'destroy']
 |--------------------------------------------------------------------------
 | AUTHENTICATED ROUTES (auth:api)
 |--------------------------------------------------------------------------
+|
+| Các route tạo sửa xóa cần auth sẽ nằm ở đây. Controller có thể tiếp tục
+| kiểm tra quyền admin nếu cần (ví dụ: chỉ admin được tạo categories).
+|
 */
 
 Route::middleware('auth:api')->group(function () {
@@ -94,6 +101,17 @@ Route::middleware('auth:api')->group(function () {
 
     // 👉 Route mới bạn muốn – admin lấy tất cả orders
     Route::get('/orders-all', [OrderController::class, 'getAll']);
+
+    /*
+    |---------------------------------------------------------------------------
+    | Categories (protected: require auth for create/update/delete)
+    | Note: controller can still verify admin role if needed.
+    |---------------------------------------------------------------------------
+    */
+    Route::post('/categories', [CategoriesController::class, 'store']);
+    Route::put('/categories/{id}', [CategoriesController::class, 'update']);
+    Route::patch('/categories/{id}', [CategoriesController::class, 'update']);
+    Route::delete('/categories/{id}', [CategoriesController::class, 'destroy']);
 });
 
 /*
