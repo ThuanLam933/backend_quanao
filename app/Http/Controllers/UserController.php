@@ -6,59 +6,103 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 
 class UserController extends Controller
 {
     /**
-     * Lấy tất cả user
+     * ----------------------------------------------------
+     * Helper: Chỉ cho admin truy cập (dùng trong admin routes)
+     * ----------------------------------------------------
      */
-    public function getAll()
+    protected function ensureAdmin()
     {
-        return response()->json(User::all());
+        try {
+            $user = auth('api')->user() ?? JWTAuth::user();
+
+            if (!$user) {
+                return response()->json(['message' => 'Unauthorized'], 401)->send();
+            }
+
+            if (($user->role ?? '') !== 'admin') {
+                return response()->json(['message' => 'Forbidden'], 403)->send();
+            }
+
+        } catch (\Throwable $e) {
+            Log::error('ensureAdmin error: ' . $e->getMessage());
+            return response()->json(['message' => 'Server error'], 500)->send();
+        }
     }
+
 
     /**
-     * Register - tạo user mới và trả token JWT
-     * Luôn gán role = 'user' (bảo mật) — ignore role từ client.
+     * ----------------------------------------------------
+     * Lấy tất cả user (admin only)
+     * ----------------------------------------------------
+     */
+    public function getAll(Request $request)
+    {
+        // Kiểm tra quyền admin
+        $check = $this->ensureAdmin();
+        if ($check) return $check;
+
+        try {
+            $users = User::all();
+            return response()->json($users, 200);
+
+        } catch (\Throwable $e) {
+            Log::error('getAll users error: '.$e->getMessage());
+            return response()->json(['message' => 'Server error'], 500);
+        }
+    }
+
+
+    /**
+     * ----------------------------------------------------
+     * Update thông tin user hiện tại
+     * ----------------------------------------------------
      */
     public function updateMe(Request $request)
-{
-    try {
-        $user = $request->user() ?? JWTAuth::user();
-        if (!$user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+    {
+        try {
+            $user = $request->user() ?? JWTAuth::user();
+            if (!$user) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+
+            $data = $request->only(['name', 'email', 'phone']);
+
+            $rules = [
+                'name'  => 'sometimes|string|max:255',
+                'email' => 'sometimes|email|max:255|unique:users,email,' . $user->id,
+                'phone' => 'sometimes|string|max:30',
+            ];
+
+            $validated = Validator::make($data, $rules);
+
+            if ($validated->fails()) {
+                return response()->json(['message' => 'Validation failed', 'errors' => $validated->errors()], 422);
+            }
+
+            $user->fill($validated->validated());
+            $user->save();
+
+            return response()->json($user, 200);
+
+        } catch (\Throwable $e) {
+            Log::error('updateMe error: '.$e->getMessage());
+            return response()->json(['message' => 'Server error'], 500);
         }
-
-        $data = $request->only(['name', 'email', 'phone']);
-
-        $rules = [
-            'name'  => 'sometimes|string|max:255',
-            'email' => 'sometimes|email|max:255|unique:users,email,' . $user->id,
-            'phone' => 'sometimes|string|max:30',
-        ];
-
-        $validated = \Illuminate\Support\Facades\Validator::make($data, $rules);
-
-        if ($validated->fails()) {
-            return response()->json(['message' => 'Validation failed', 'errors' => $validated->errors()], 422);
-        }
-
-        $vals = $validated->validated();
-
-        
-
-        $user->fill($vals);
-        $user->save();
-
-        return response()->json($user, 200);
-    } catch (\Throwable $e) {
-        \Log::error('updateMe error: '.$e->getMessage());
-        return response()->json(['message' => 'Server error'], 500);
     }
-}
 
+
+    /**
+     * ----------------------------------------------------
+     * Register user — mặc định role=user
+     * ----------------------------------------------------
+     */
     public function register(Request $request)
     {
         try {
@@ -76,7 +120,7 @@ class UserController extends Controller
                 'email'    => $data['email'],
                 'password' => bcrypt($data['password']),
                 'phone'    => $data['phone'] ?? null,
-                'role'     => 'user',   // IMPORTANT: public register luôn là 'user'
+                'role'     => 'user',
                 'status'   => 1,
             ]);
 
@@ -91,31 +135,28 @@ class UserController extends Controller
                 'token_type'   => 'bearer',
                 'expires_in'   => $this->getTtlSeconds(),
             ], 201);
+
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors'  => $e->errors(),
-            ], 422);
+            return response()->json(['message' => 'Validation failed', 'errors' => $e->errors()], 422);
         } catch (\Throwable $e) {
             Log::error('Register error: ' . $e->getMessage());
-            return response()->json([
-                'message' => 'Server error',
-            ], 500);
+            return response()->json(['message' => 'Server error'], 500);
         }
     }
 
+
     /**
-     * Admin-only: tạo user (admin có thể truyền role: 'admin' hoặc 'user')
-     * Route nên được bảo vệ bằng auth middleware.
+     * ----------------------------------------------------
+     * Admin-only: tạo user
+     * ----------------------------------------------------
      */
     public function createByAdmin(Request $request)
     {
-        try {
-            $authUser = $request->user();
-            if (!$authUser || ($authUser->role ?? '') !== 'admin') {
-                return response()->json(['message' => 'Forbidden'], 403);
-            }
+        // Kiểm tra quyền admin
+        $check = $this->ensureAdmin();
+        if ($check) return $check;
 
+        try {
             $data = $request->validate([
                 'name'     => 'required|string|max:255',
                 'email'    => 'required|email|unique:users,email',
@@ -135,6 +176,7 @@ class UserController extends Controller
             ]);
 
             return response()->json(['message' => 'User created by admin', 'user' => $user], 201);
+
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['message' => 'Validation failed', 'errors' => $e->errors()], 422);
         } catch (\Throwable $e) {
@@ -143,8 +185,11 @@ class UserController extends Controller
         }
     }
 
+
     /**
-     * Login - nhận email + password, trả token nếu đúng
+     * ----------------------------------------------------
+     * Login
+     * ----------------------------------------------------
      */
     public function login(Request $request)
     {
@@ -155,21 +200,14 @@ class UserController extends Controller
 
         try {
             $guard = auth('api');
-            $token = null;
-
-            if (is_object($guard) && method_exists($guard, 'attempt')) {
-                $token = $guard->attempt($credentials);
-            }
-
-            if (!$token) {
-                $token = JWTAuth::attempt($credentials);
-            }
+            $token = $guard->attempt($credentials) ?: JWTAuth::attempt($credentials);
 
             if (!$token) {
                 return response()->json(['message' => 'Email hoặc mật khẩu không đúng'], 401);
             }
 
             return $this->respondWithToken($token);
+
         } catch (JWTException $e) {
             Log::error('JWT Exception on login: '.$e->getMessage());
             return response()->json(['message' => 'Lỗi khi tạo token'], 500);
@@ -179,46 +217,48 @@ class UserController extends Controller
         }
     }
 
+
     /**
-     * Logout - invalidates token
+     * ----------------------------------------------------
+     * Logout
+     * ----------------------------------------------------
      */
     public function logout(Request $request)
     {
         try {
-            // Prefer guard logout if available
             $guard = auth('api');
-            if (is_object($guard) && method_exists($guard, 'logout')) {
+            if (method_exists($guard, 'logout')) {
                 $guard->logout();
             } else {
                 $token = JWTAuth::getToken();
-                if ($token) {
-                    JWTAuth::invalidate($token);
-                }
+                if ($token) JWTAuth::invalidate($token);
             }
 
             return response()->json(['message' => 'Đã đăng xuất']);
+
         } catch (JWTException $e) {
             Log::error('JWT logout error: '.$e->getMessage());
             return response()->json(['message' => 'Lỗi khi logout'], 500);
+
         } catch (\Throwable $e) {
             Log::error('Logout error: '.$e->getMessage());
             return response()->json(['message' => 'Lỗi server'], 500);
         }
     }
 
+
     /**
-     * Refresh token
+     * ----------------------------------------------------
+     * Refresh Token
+     * ----------------------------------------------------
      */
     public function refresh()
     {
         try {
             $guard = auth('api');
-            if (is_object($guard) && method_exists($guard, 'refresh')) {
-                $newToken = $guard->refresh();
-            } else {
-                $newToken = JWTAuth::refresh();
-            }
+            $newToken = $guard->refresh() ?? JWTAuth::refresh();
             return $this->respondWithToken($newToken);
+
         } catch (JWTException $e) {
             Log::error('JWT refresh error: '.$e->getMessage());
             return response()->json(['message' => 'Lỗi khi refresh token'], 500);
@@ -228,28 +268,31 @@ class UserController extends Controller
         }
     }
 
+
     /**
-     * Thông tin user hiện tại
+     * ----------------------------------------------------
+     * Me
+     * ----------------------------------------------------
      */
     public function me(Request $request)
     {
         try {
-            // prefer $request->user()
-            $user = $request->user();
-            if (!$user) {
-                $user = JWTAuth::user();
-            }
+            $user = $request->user() ?? JWTAuth::user();
             return response()->json($user);
+
         } catch (\Throwable $e) {
             Log::error('Me error: '.$e->getMessage());
             return response()->json(['message' => 'Lỗi server'], 500);
         }
     }
-    
 
-    /**
-     * Helper: trả token với metadata
-     */
+
+
+
+    /* ====================================================
+       TOKEN HELPERS
+       ==================================================== */
+
     protected function respondWithToken($token)
     {
         return response()->json([
@@ -260,47 +303,28 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * Tạo token cho user (login from user)
-     */
+
     protected function createTokenForUser(User $user)
     {
         $guard = auth('api');
-
-        if (is_object($guard) && method_exists($guard, 'login')) {
-            return $guard->login($user);
-        }
-
-        return JWTAuth::fromUser($user);
+        return $guard->login($user) ?: JWTAuth::fromUser($user);
     }
 
-    /**
-     * Lấy user cho response
-     */
+
     protected function meUserForResponse()
     {
         $guard = auth('api');
-
-        if (is_object($guard) && method_exists($guard, 'user')) {
-            return $guard->user();
-        }
-
-        return JWTAuth::user();
+        return $guard->user() ?? JWTAuth::user();
     }
 
-    /**
-     * Lấy TTL token (giây)
-     */
+
     protected function getTtlSeconds()
     {
         try {
             $guard = auth('api');
-            if (is_object($guard) && method_exists($guard, 'factory')) {
-                return $guard->factory()->getTTL() * 60;
-            }
-            return JWTAuth::factory()->getTTL() * 60;
+            return $guard->factory()->getTTL() * 60;
         } catch (\Throwable $e) {
-            return 60 * 60; // fallback 1 hour
+            return 3600; // fallback 1h
         }
     }
 }

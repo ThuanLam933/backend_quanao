@@ -14,6 +14,35 @@ class OrderController extends Controller
     /**
      * Lấy danh sách đơn hàng (admin).
      */
+    public function getAll(Request $request)
+{
+    try {
+        // Lấy user từ JWT
+        $user = $request->user() ?? auth('api')->user() ?? \Tymon\JWTAuth\Facades\JWTAuth::user();
+
+        // Nếu chưa đăng nhập → unauthorized
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        // Nếu không phải admin → forbidden
+        if (($user->role ?? '') !== 'admin') {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        // Lấy toàn bộ đơn hàng
+        $orders = Order::with('user', 'discount')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($orders, 200);
+
+    } catch (\Throwable $e) {
+        \Log::error('getAll Orders error: ' . $e->getMessage());
+        return response()->json(['message' => 'Server error'], 500);
+    }
+}
+
     public function index(Request $request)
     {
         // Simple admin check - thay bằng middleware 'is_admin' nếu bạn có
@@ -133,7 +162,9 @@ class OrderController extends Controller
             $order->email = $payload['customer']['email'];
             $order->phone = $payload['customer']['phone'];
             $order->address = $payload['customer']['address'];
-            $order->note = $payload['note'] ?? null;
+            // Nếu DB không cho NULL, lưu chuỗi rỗng thay vì null
+            $order->note = $payload['note'] ?? '';
+
             $order->total_price = $totalPrice;
             // map payment method: translate 'cod' -> 'Cash' (migration uses 'Cash'|'Banking')
             $pm = $payload['payment']['method'] ?? null;
