@@ -10,6 +10,8 @@ use App\Http\Controllers\SizeController;
 use App\Http\Controllers\ProductDetailController;
 use App\Http\Controllers\ImageProductController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\SupplierController;   // <-- thêm
+use App\Http\Controllers\ReceiptController;    // <-- thêm
 
 /*
 |--------------------------------------------------------------------------
@@ -52,10 +54,6 @@ Route::delete('/image-products/{id}', [ImageProductController::class, 'destroy']
 |--------------------------------------------------------------------------
 | AUTHENTICATED ROUTES (auth:api)
 |--------------------------------------------------------------------------
-|
-| Các route tạo sửa xóa cần auth sẽ nằm ở đây. Controller có thể tiếp tục
-| kiểm tra quyền admin nếu cần (ví dụ: chỉ admin được tạo categories).
-|
 */
 
 Route::middleware('auth:api')->group(function () {
@@ -66,12 +64,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/me',        [UserController::class, 'me']);
     Route::put('/me',        [UserController::class, 'updateMe']);
 
-    // Product details (you can move to admin)
+    // Product details
     Route::post('/product-details', [ProductDetailController::class, 'store']);
     Route::put('/product-details/{id}', [ProductDetailController::class, 'update']);
     Route::delete('/product-details/{id}', [ProductDetailController::class, 'destroy']);
 
-    // Colors & Sizes (you can restrict to admin)
+    // Colors & Sizes
     Route::post('/colors', [ColorController::class, 'store']);
     Route::put('/colors/{id}', [ColorController::class, 'update']);
     Route::delete('/colors/{id}', [ColorController::class, 'destroy']);
@@ -99,14 +97,13 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/orders/{id}', [OrderController::class, 'update']);
     Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
 
-    // 👉 Route mới bạn muốn – admin lấy tất cả orders
+    // admin lấy tất cả orders (bạn đã dùng trong AdminPanel)
     Route::get('/orders-all', [OrderController::class, 'getAll']);
 
     /*
-    |---------------------------------------------------------------------------
-    | Categories (protected: require auth for create/update/delete)
-    | Note: controller can still verify admin role if needed.
-    |---------------------------------------------------------------------------
+    |--------------------------------------------------------------------------
+    | Categories (protected)
+    |--------------------------------------------------------------------------
     */
     Route::post('/categories', [CategoriesController::class, 'store']);
     Route::put('/categories/{id}', [CategoriesController::class, 'update']);
@@ -116,10 +113,7 @@ Route::middleware('auth:api')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| ADMIN ROUTES (OPTIONAL)
-|--------------------------------------------------------------------------
-| Bạn có thể bỏ hẳn group này nếu không dùng prefix /admin.
-| Vì tất cả controller đã tự kiểm tra admin.
+| ADMIN ROUTES (auth + /admin prefix)
 |--------------------------------------------------------------------------
 */
 
@@ -129,8 +123,32 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::get('/users', [UserController::class, 'getAll']);
     Route::post('/users', [UserController::class, 'createByAdmin']);
 
-    // Orders
+    // Orders (admin view)
     Route::get('/orders', [OrderController::class, 'index']);
     Route::put('/orders/{id}', [OrderController::class, 'update']);
     Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Suppliers (CRUD)
+    |--------------------------------------------------------------------------
+    */
+    Route::apiResource('suppliers', SupplierController::class);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Receipts (phiếu nhập kho)
+    |--------------------------------------------------------------------------
+    |
+    | ReceiptController của bạn nên có các method:
+    | - index()
+    | - store()
+    | - show(Receipt $receipt)
+    | - destroy(Receipt $receipt)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/receipts', [ReceiptController::class, 'index']);
+    Route::post('/receipts', [ReceiptController::class, 'store']);
+    Route::get('/receipts/{receipt}', [ReceiptController::class, 'show']);
+    Route::delete('/receipts/{receipt}', [ReceiptController::class, 'destroy']);
 });
