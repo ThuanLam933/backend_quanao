@@ -8,12 +8,14 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use App\Models\Product_detail;
+use App\Models\InventoryLog;
+use App\Models\Product; // update trạng thái product
+use Exception;
 
 class ReceiptController extends Controller
 {
     /**
      * List receipts (paginated).
-     * Optional filters: supplier_id, date_from, date_to
      */
     public function index(Request $request)
     {
@@ -44,16 +46,6 @@ class ReceiptController extends Controller
 
     /**
      * Create receipt with details.
-     *
-     * Expected payload:
-     * {
-     *   suppliers_id: int,
-     *   note: string,
-     *   import_date: "YYYY-MM-DD", (optional)
-     *   items: [
-     *     { product_detail_id: int, quantity: int, price: decimal }
-     *   ]
-     * }
      */
     public function store(Request $request)
     {
@@ -71,12 +63,13 @@ class ReceiptController extends Controller
 
         DB::beginTransaction();
         try {
+            // Compute total
             $total = 0;
             foreach ($data['items'] as $it) {
-                $subtotal = (float)$it['quantity'] * (float)$it['price'];
-                $total += $subtotal;
+                $total += intval($it['quantity']) * floatval($it['price']);
             }
 
+            // Create receipt
             $receipt = Receipt::create([
                 'user_id' => $userId,
                 'suppliers_id' => $data['suppliers_id'],
@@ -85,22 +78,53 @@ class ReceiptController extends Controller
                 'import_date' => $data['import_date'] ?? now()->toDateString(),
             ]);
 
+            // Process items
             foreach ($data['items'] as $it) {
-                $subtotal = (float)$it['quantity'] * (float)$it['price'];
+                $productDetailId = $it['product_detail_id'];
+                $qty = intval($it['quantity']);
+                $price = floatval($it['price']);
+                $subtotal = $qty * $price;
 
-                $detail = ReceiptDetail::create([
-                    'product_detail_id' => $it['product_detail_id'],
+                ReceiptDetail::create([
+                    'product_detail_id' => $productDetailId,
                     'receipt_id' => $receipt->id,
-                    'quantity' => $it['quantity'],
-                    'price' => $it['price'],
+                    'quantity' => $qty,
+                    'price' => $price,
                     'subtotal' => $subtotal,
                 ]);
 
-                // Update product_detail stock: increase quantity
-                $pd = Product_detail::lockForUpdate()->find($it['product_detail_id']);
-                if ($pd) {
-                    $pd->quantity = ($pd->quantity ?? 0) + intval($it['quantity']);
-                    $pd->save();
+                // LOCK product_detail and increase stock
+                $pd = Product_detail::lockForUpdate()->find($productDetailId);
+                if (! $pd) throw new Exception("Product detail id {$productDetailId} not found");
+
+                $beforeQty = (int) ($pd->quantity ?? 0);
+                $pd->quantity = $beforeQty + $qty;
+
+                if (array_key_exists('status', $pd->getAttributes()) || property_exists($pd, 'status')) {
+                    $pd->status = ($pd->quantity > 0) ? 1 : 0;
+                }
+
+                $pd->save();
+
+                // Inventory log
+                InventoryLog::create([
+                    'product_detail_id' => $pd->id,
+                    'change' => $qty,
+                    'quantity_before' => $beforeQty,
+                    'quantity_after' => (int) $pd->quantity,
+                    'type' => 'receipt',
+                    'related_id' => $receipt->id,
+                    'user_id' => $userId,
+                    'note' => "Nhập kho từ phiếu #{$receipt->id}",
+                ]);
+
+                // Update parent product status (set to in-stock if any detail > 0)
+                try {
+                    if (!empty($pd->product_id)) {
+                        $this->refreshProductStockStatus($pd->product_id);
+                    }
+                } catch (\Throwable $e) {
+                    \Log::warning("Failed to update product status after receipt: ".$e->getMessage());
                 }
             }
 
@@ -110,29 +134,21 @@ class ReceiptController extends Controller
             return response()->json($receipt, 201);
         } catch (\Throwable $e) {
             DB::rollBack();
-            \Log::error('Receipt create failed: '.$e->getMessage(), ['trace'=>$e->getTraceAsString()]);
+            \Log::error('Receipt create failed: '.$e->getMessage(), [
+                'trace'=>$e->getTraceAsString(),
+                'payload' => $data
+            ]);
             return response()->json(['message' => 'Create failed', 'error' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Delete receipt (and rollback stock?).
-     * NOTE: deleting a receipt will NOT reduce stock by default.
-     * If you want automatic stock rollback on delete, enable the commented block.
+     * Delete receipt. (no stock rollback by default)
      */
     public function destroy(Receipt $receipt)
     {
         DB::beginTransaction();
         try {
-            // Optional: rollback stock when deleting a receipt
-            // foreach ($receipt->details as $d) {
-            //     $pd = ProductDetail::lockForUpdate()->find($d->product_detail_id);
-            //     if ($pd) {
-            //         $pd->quantity = max(0, ($pd->quantity ?? 0) - $d->quantity);
-            //         $pd->save();
-            //     }
-            // }
-
             $receipt->details()->delete();
             $receipt->delete();
 
@@ -142,6 +158,25 @@ class ReceiptController extends Controller
             DB::rollBack();
             \Log::error('Receipt delete failed: '.$e->getMessage());
             return response()->json(['message' => 'Delete failed'], 500);
+        }
+    }
+
+    /**
+     * Helper: refresh product.status based on its product_details.
+     * Sets product.status = 1 if any product_detail.quantity > 0, else 0.
+     */
+    protected function refreshProductStockStatus($productId)
+    {
+        if (empty($productId)) return;
+
+        $hasStock = Product_detail::where('product_id', $productId)->where('quantity', '>', 0)->exists();
+
+        if (class_exists(Product::class)) {
+            $prod = Product::find($productId);
+            if ($prod && (array_key_exists('status', $prod->getAttributes()) || property_exists($prod, 'status'))) {
+                $prod->status = $hasStock ? 1 : 0;
+                $prod->save();
+            }
         }
     }
 }

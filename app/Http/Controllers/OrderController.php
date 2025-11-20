@@ -9,43 +9,43 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
+use App\Models\Product_detail; // dùng để lock & trừ tồn
+use App\Models\OrderItem;       // nếu bạn có model OrderItem
+use App\Models\InventoryLog;    // audit log
+use App\Models\Product;         // update product status
+use Exception;
+
 class OrderController extends Controller
 {
     /**
      * Lấy danh sách đơn hàng (admin).
      */
     public function getAll(Request $request)
-{
-    try {
-        // Lấy user từ JWT
-        $user = $request->user() ?? auth('api')->user() ?? \Tymon\JWTAuth\Facades\JWTAuth::user();
+    {
+        try {
+            $user = $request->user() ?? auth('api')->user() ?? \Tymon\JWTAuth\Facades\JWTAuth::user();
 
-        // Nếu chưa đăng nhập → unauthorized
-        if (!$user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+            if (!$user) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+
+            if (($user->role ?? '') !== 'admin') {
+                return response()->json(['message' => 'Forbidden'], 403);
+            }
+
+            $orders = Order::with('user', 'discount')
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json($orders, 200);
+        } catch (\Throwable $e) {
+            \Log::error('getAll Orders error: ' . $e->getMessage());
+            return response()->json(['message' => 'Server error'], 500);
         }
-
-        // Nếu không phải admin → forbidden
-        if (($user->role ?? '') !== 'admin') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        // Lấy toàn bộ đơn hàng
-        $orders = Order::with('user', 'discount')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return response()->json($orders, 200);
-
-    } catch (\Throwable $e) {
-        \Log::error('getAll Orders error: ' . $e->getMessage());
-        return response()->json(['message' => 'Server error'], 500);
     }
-}
 
     public function index(Request $request)
     {
-        // Simple admin check - thay bằng middleware 'is_admin' nếu bạn có
         $user = $request->user();
         if (!$user || (($user->role ?? '') !== 'admin' && ($user->is_admin ?? false) !== true && ($user->isAdmin ?? false) !== true)) {
             return response()->json(['message' => 'Forbidden'], 403);
@@ -54,7 +54,6 @@ class OrderController extends Controller
         $perPage = intval($request->query('per_page', 20));
         $q = Order::query()->with('user', 'discount')->orderBy('created_at', 'desc');
 
-        // optional filters
         if ($request->filled('status')) {
             $q->where('status', $request->query('status'));
         }
@@ -79,8 +78,7 @@ class OrderController extends Controller
 
         $user = $request->user();
 
-        // nếu không phải admin và không phải owner -> forbidden
-        $isAdmin = $user && ((($user->role ?? '') === 'admin') || ($user->is_admin ?? false) === true || ($user->isAdmin ?? false) === true);
+        $isAdmin = $user && (((($user->role ?? '') === 'admin') || ($user->is_admin ?? false) === true || ($user->isAdmin ?? false) === true));
         if (!$isAdmin && (! $user || $order->user_id !== $user->id)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
@@ -91,13 +89,8 @@ class OrderController extends Controller
     /**
      * Tạo đơn hàng mới.
      *
-     * Expected payload example (frontend):
-     * {
-     *   customer: { name, email, phone, address },
-     *   items: [{ product_id, quantity, unit_price }, ...],
-     *   payment: { method: 'cod'|'card', card: {...} },
-     *   totals: { subtotal, shipping, total }
-     * }
+     * Backend sẽ trừ tồn ngay khi order được tạo (trong transaction).
+     * Nếu thiếu tồn => trả 422.
      */
     public function store(Request $request)
     {
@@ -108,8 +101,9 @@ class OrderController extends Controller
             'customer.phone' => 'required|string|max:50',
             'customer.address' => 'required|string|max:1000',
 
-            'items' => 'sometimes|array',
-            'items.*.product_id' => 'required_with:items|integer',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'nullable|integer',
+            'items.*.product_detail_id' => 'nullable|integer',
             'items.*.quantity' => 'required_with:items|integer|min:1',
             'items.*.unit_price' => 'nullable|numeric|min:0',
 
@@ -129,18 +123,19 @@ class OrderController extends Controller
         }
 
         $payload = $request->all();
+        $items = $payload['items'] ?? [];
 
         DB::beginTransaction();
         try {
             $user = $request->user();
 
-            // Determine total price: prefer totals.total from client, else compute from items if present
+            // compute totalPrice
             $totalPrice = null;
             if (!empty($payload['totals']['total'])) {
                 $totalPrice = (float) $payload['totals']['total'];
-            } elseif (!empty($payload['items']) && is_array($payload['items'])) {
+            } elseif (!empty($items) && is_array($items)) {
                 $sum = 0;
-                foreach ($payload['items'] as $it) {
+                foreach ($items as $it) {
                     $unit = isset($it['unit_price']) ? (float) $it['unit_price'] : 0;
                     $qty = isset($it['quantity']) ? (int) $it['quantity'] : 1;
                     $sum += $unit * $qty;
@@ -151,10 +146,57 @@ class OrderController extends Controller
                 $totalPrice = (float) ($payload['totals']['subtotal'] ?? 0);
             }
 
-            // create order
+            // Pre-check availability: lock each product_detail (by id if provided,
+            // otherwise pick a product_detail for product_id that has sufficient qty)
+            $lockedPDs = []; // store Product_detail instances keyed by item index
+            foreach ($items as $idx => $it) {
+                $qtyReq = (int) ($it['quantity'] ?? 0);
+                $pd = null;
+
+                if (!empty($it['product_detail_id'])) {
+                    // lock by product_detail_id
+                    $pd = Product_detail::lockForUpdate()->find($it['product_detail_id']);
+                    if (! $pd) {
+                        DB::rollBack();
+                        return response()->json(['message' => 'Product detail not found', 'product_detail_id' => $it['product_detail_id']], 422);
+                    }
+                } elseif (!empty($it['product_id'])) {
+                    // attempt to find one product_detail of that product with enough quantity
+                    $pd = Product_detail::where('product_id', $it['product_id'])
+                        ->where('quantity', '>=', $qtyReq)
+                        ->lockForUpdate()
+                        ->first();
+
+                    // fallback: if none has >= qty, pick first detail (we will then report insufficient)
+                    if (! $pd) {
+                        $pd = Product_detail::where('product_id', $it['product_id'])->lockForUpdate()->first();
+                        if (! $pd) {
+                            DB::rollBack();
+                            return response()->json(['message' => 'No product detail found for product', 'product_id' => $it['product_id']], 422);
+                        }
+                    }
+                } else {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Item must include product_detail_id or product_id', 'index' => $idx], 422);
+                }
+
+                $available = (int)($pd->quantity ?? 0);
+                if ($available < $qtyReq) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => 'Insufficient stock',
+                        'product_detail_id' => $pd->id,
+                        'available' => $available,
+                        'requested' => $qtyReq,
+                    ], 422);
+                }
+
+                $lockedPDs[$idx] = $pd;
+            }
+
+            // Create order
             $order = new Order();
             if ($user) $order->user_id = $user->id;
-            // if discount_id present and valid, you can set it, here we try to use provided discount_id
             if (!empty($payload['discount_id'])) $order->discount_id = $payload['discount_id'];
 
             $order->order_code = (string) Str::uuid();
@@ -162,11 +204,9 @@ class OrderController extends Controller
             $order->email = $payload['customer']['email'];
             $order->phone = $payload['customer']['phone'];
             $order->address = $payload['customer']['address'];
-            // Nếu DB không cho NULL, lưu chuỗi rỗng thay vì null
             $order->note = $payload['note'] ?? '';
-
             $order->total_price = $totalPrice;
-            // map payment method: translate 'cod' -> 'Cash' (migration uses 'Cash'|'Banking')
+
             $pm = $payload['payment']['method'] ?? null;
             if ($pm === 'cod') $order->payment_method = 'Cash';
             elseif ($pm === 'card' || $pm === 'Banking') $order->payment_method = 'Banking';
@@ -177,33 +217,89 @@ class OrderController extends Controller
 
             $order->save();
 
-            // TODO: If you have order items table/model, persist items here.
-            // Example (if you have OrderItem model):
-            // foreach ($payload['items'] as $it) {
-            //     OrderItem::create([
-            //         'order_id' => $order->id,
-            //         'product_id' => $it['product_id'],
-            //         'quantity' => $it['quantity'],
-            //         'unit_price' => $it['unit_price'] ?? null,
-            //     ]);
-            // }
+            // Create OrderItem, decrement stock, create InventoryLog
+            foreach ($items as $idx => $it) {
+                $qty = (int) ($it['quantity'] ?? 0);
+                $unitPrice = isset($it['unit_price']) ? (float) $it['unit_price'] : null;
+
+                $pd = $lockedPDs[$idx] ?? null;
+                if (! $pd) {
+                    if (!empty($it['product_detail_id'])) {
+                        $pd = Product_detail::lockForUpdate()->find($it['product_detail_id']);
+                    } elseif (!empty($it['product_id'])) {
+                        $pd = Product_detail::where('product_id', $it['product_id'])->lockForUpdate()->first();
+                    }
+                }
+                if (! $pd) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Product detail lost during order creation'], 500);
+                }
+
+                if ($unitPrice === null) {
+                    $unitPrice = (float) ($pd->price ?? 0);
+                }
+
+                if (class_exists(OrderItem::class)) {
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_detail_id' => $pd->id,
+                        'product_id' => $pd->product_id ?? null,
+                        'quantity' => $qty,
+                        'unit_price' => $unitPrice,
+                        'subtotal' => $qty * $unitPrice,
+                    ]);
+                } else {
+                    \Log::warning('OrderItem model not found - skipping item persist. Create OrderItem model to store items.');
+                }
+
+                $beforeQty = (int) ($pd->quantity ?? 0);
+                $pd->quantity = max(0, $beforeQty - $qty);
+
+                if (array_key_exists('status', $pd->getAttributes()) || property_exists($pd, 'status')) {
+                    $pd->status = ($pd->quantity > 0) ? 1 : 0;
+                }
+                $pd->save();
+
+                if (class_exists(InventoryLog::class)) {
+                    InventoryLog::create([
+                        'product_detail_id' => $pd->id,
+                        'change' => -$qty,
+                        'quantity_before' => $beforeQty,
+                        'quantity_after' => (int)$pd->quantity,
+                        'type' => 'order',
+                        'related_id' => $order->id,
+                        'user_id' => $user ? $user->id : null,
+                        'note' => "Giảm kho do đơn hàng #{$order->id}",
+                    ]);
+                }
+
+                // refresh parent product status
+                try {
+                    if (!empty($pd->product_id)) {
+                        $this->refreshProductStockStatus($pd->product_id);
+                    }
+                } catch (\Throwable $e) {
+                    \Log::warning('Could not update parent product status: '.$e->getMessage());
+                }
+            }
 
             DB::commit();
 
-            // return created order (you can include items if you saved them)
+            $order->load('user');
+
             return response()->json([
                 'message' => 'Order created',
                 'order' => $order,
             ], 201);
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Create order error: ' . $e->getMessage());
-            return response()->json(['message' => 'Server error when creating order'], 500);
+            Log::error('Create order error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString(), 'payload' => $payload]);
+            return response()->json(['message' => 'Server error when creating order', 'error' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Cập nhật đơn hàng (admin) - ví dụ: update status, payment_method, note, total_price
+     * Cập nhật đơn hàng (admin)
      */
     public function update(Request $request, $id)
     {
@@ -253,6 +349,25 @@ class OrderController extends Controller
         } catch (\Throwable $e) {
             Log::error('Delete order error: ' . $e->getMessage());
             return response()->json(['message' => 'Server error'], 500);
+        }
+    }
+
+    /**
+     * Helper: refresh product.status based on its product_details.
+     * Sets product.status = 1 if any product_detail.quantity > 0, else 0.
+     */
+    protected function refreshProductStockStatus($productId)
+    {
+        if (empty($productId)) return;
+
+        $hasStock = Product_detail::where('product_id', $productId)->where('quantity', '>', 0)->exists();
+
+        if (class_exists(Product::class)) {
+            $prod = Product::find($productId);
+            if ($prod && (array_key_exists('status', $prod->getAttributes()) || property_exists($prod, 'status'))) {
+                $prod->status = $hasStock ? 1 : 0;
+                $prod->save();
+            }
         }
     }
 }

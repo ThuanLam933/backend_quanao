@@ -10,8 +10,9 @@ use App\Http\Controllers\SizeController;
 use App\Http\Controllers\ProductDetailController;
 use App\Http\Controllers\ImageProductController;
 use App\Http\Controllers\OrderController;
-use App\Http\Controllers\SupplierController;   // <-- thêm
-use App\Http\Controllers\ReceiptController;    // <-- thêm
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\InventoryController; // <-- added
 
 /*
 |--------------------------------------------------------------------------
@@ -64,7 +65,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/me',        [UserController::class, 'me']);
     Route::put('/me',        [UserController::class, 'updateMe']);
 
-    // Product details
+    // Product details (protected)
     Route::post('/product-details', [ProductDetailController::class, 'store']);
     Route::put('/product-details/{id}', [ProductDetailController::class, 'update']);
     Route::delete('/product-details/{id}', [ProductDetailController::class, 'destroy']);
@@ -115,6 +116,10 @@ Route::middleware('auth:api')->group(function () {
 |--------------------------------------------------------------------------
 | ADMIN ROUTES (auth + /admin prefix)
 |--------------------------------------------------------------------------
+|
+| These routes require authentication. You can also apply additional
+| middleware (e.g. role:admin) if you want to restrict to admin users.
+|
 */
 
 Route::middleware('auth:api')->prefix('admin')->group(function () {
@@ -139,16 +144,23 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     |--------------------------------------------------------------------------
     | Receipts (phiếu nhập kho)
     |--------------------------------------------------------------------------
-    |
-    | ReceiptController của bạn nên có các method:
-    | - index()
-    | - store()
-    | - show(Receipt $receipt)
-    | - destroy(Receipt $receipt)
-    |--------------------------------------------------------------------------
     */
     Route::get('/receipts', [ReceiptController::class, 'index']);
     Route::post('/receipts', [ReceiptController::class, 'store']);
     Route::get('/receipts/{receipt}', [ReceiptController::class, 'show']);
     Route::delete('/receipts/{receipt}', [ReceiptController::class, 'destroy']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Inventory (logs & adjustments)
+    |--------------------------------------------------------------------------
+    |
+    | Endpoints to read inventory logs, do manual adjustments, revert receipts,
+    | and also create log-only entries (for imports).
+    |
+    */
+    Route::get('/inventory/logs', [InventoryController::class, 'index']);               // list / filter logs (paginated)
+    Route::post('/inventory/adjust', [InventoryController::class, 'adjust']);         // manual adjustment (change can be + or -)
+    Route::post('/inventory/logs', [InventoryController::class, 'createLogOnly']);    // create a log entry without changing qty
+    Route::post('/inventory/revert-receipt/{receiptId}', [InventoryController::class, 'revertReceipt']); // revert a receipt (careful)
 });
