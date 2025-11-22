@@ -13,6 +13,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\InventoryController; // <-- added
+use App\Http\Controllers\ReturnRequestController; // <-- returns controller (new)
 
 /*
 |--------------------------------------------------------------------------
@@ -53,6 +54,21 @@ Route::delete('/image-products/{id}', [ImageProductController::class, 'destroy']
 
 /*
 |--------------------------------------------------------------------------
+| RETURNS (Exchange / Return requests)
+|--------------------------------------------------------------------------
+|
+| Public: index + show (admin/front-end may require auth; controller can
+|         perform additional permission checks).
+| Authenticated: store / update / destroy (protected by auth:api).
+|
+*/
+
+// Public read routes for returns
+Route::get('/returns', [ReturnRequestController::class, 'index']);
+Route::get('/returns/{id}', [ReturnRequestController::class, 'show']);
+
+/*
+|--------------------------------------------------------------------------
 | AUTHENTICATED ROUTES (auth:api)
 |--------------------------------------------------------------------------
 */
@@ -86,13 +102,13 @@ Route::middleware('auth:api')->group(function () {
     */
 
     // Create order
+    Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);
 
     // Show order (owner or admin, controller check)
     Route::get('/orders/{id}', [OrderController::class, 'show']);
 
     // List orders (admin only, controller check)
-    Route::get('/orders', [OrderController::class, 'index']);
 
     // CRUD (admin)
     Route::put('/orders/{id}', [OrderController::class, 'update']);
@@ -110,6 +126,15 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/categories/{id}', [CategoriesController::class, 'update']);
     Route::patch('/categories/{id}', [CategoriesController::class, 'update']);
     Route::delete('/categories/{id}', [CategoriesController::class, 'destroy']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Returns (protected write routes)
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/returns', [ReturnRequestController::class, 'store']);
+    Route::put('/returns/{id}', [ReturnRequestController::class, 'update']);
+    Route::delete('/returns/{id}', [ReturnRequestController::class, 'destroy']);
 });
 
 /*
@@ -163,4 +188,17 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::post('/inventory/adjust', [InventoryController::class, 'adjust']);         // manual adjustment (change can be + or -)
     Route::post('/inventory/logs', [InventoryController::class, 'createLogOnly']);    // create a log entry without changing qty
     Route::post('/inventory/revert-receipt/{receiptId}', [InventoryController::class, 'revertReceipt']); // revert a receipt (careful)
+
+    /*
+    |--------------------------------------------------------------------------
+    | Admin returns management (optional - reuse ReturnController)
+    |--------------------------------------------------------------------------
+    |
+    | These admin-prefixed routes point to the same controller but are useful
+    | if you prefer separate admin endpoints / URLs.
+    |
+    */
+    Route::get('/returns', [ReturnRequestController::class, 'index']);
+    Route::put('/returns/{id}', [ReturnRequestController::class, 'update']);
+    Route::delete('/returns/{id}', [ReturnRequestController::class, 'destroy']);
 });
