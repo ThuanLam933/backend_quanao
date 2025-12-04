@@ -67,28 +67,61 @@ class OrderController extends Controller
     /* ============================================
      * ORDER DETAILS
      * ============================================ */
-    public function show(Request $request, $id)
-    {
-        $order = Order::with([
-            'user',
-            'discount',
-            'items.productDetail.product',
-            'items.productDetail.color',
-            'items.productDetail.size',
-            'items.productDetail.images',
-        ])->find($id);
+    /* ============================================
+ * ORDER DETAILS
+ * ============================================ */
+public function show(Request $request, $id)
+{
+    $order = Order::with([
+        'user',
+        'discount',
+        'items.productDetail.product',
+        'items.productDetail.color',
+        'items.productDetail.size',
+        'items.productDetail.images',
+    ])->find($id);
 
-        if (!$order) return response()->json(['message' => 'Order not found'], 404);
+    if (!$order) return response()->json(['message' => 'Order not found'], 404);
 
-        $user = $request->user();
-        $isAdmin = $user && $user->role === 'admin';
+    $user = $request->user();
+    $isAdmin = $user && $user->role === 'admin';
 
-        if (!$isAdmin && $order->user_id !== $user->id) {
-            return response()->json(['message' => 'Forbidden'], 403);
+    if (!$isAdmin && $order->user_id !== $user->id) {
+        return response()->json(['message' => 'Forbidden'], 403);
+    }
+
+    // ------------------------------------------
+    // ⭐ FIX: THÊM FULL_URL CHO IMAGES TRONG ORDER
+    // ------------------------------------------
+    foreach ($order->items as $item) {
+        $pd = $item->productDetail;
+
+        if ($pd && $pd->images) {
+            $pd->images = collect($pd->images)->map(function ($img) {
+
+                // If already full URL
+                if (preg_match('/^https?:\\/\\//i', $img->url_image)) {
+                    $img->full_url = $img->url_image;
+                } else {
+                    // Build Laravel storage URL
+                    $img->full_url = url('storage/' . ltrim($img->url_image, '/'));
+                }
+
+                return $img;
+            })->values();
         }
 
-        return response()->json($order);
+        // Fix main product image URL
+        if ($pd && $pd->product && $pd->product->image_url) {
+            if (!preg_match('/^https?:\\/\\//i', $pd->product->image_url)) {
+                $pd->product->image_url = url('storage/' . ltrim($pd->product->image_url, '/'));
+            }
+        }
     }
+
+    return response()->json($order);
+}
+
 
 
 
