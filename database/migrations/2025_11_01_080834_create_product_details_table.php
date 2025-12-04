@@ -23,7 +23,7 @@ return new class extends Migration
                 ->constrained()
                 ->onDelete('cascade');
             $table->decimal('price');
-            $table->integer('quantity');
+            $table->integer('quantity')->default(0);
             $table->tinyInteger('status')->default(1);
             $table->timestamps();
         });

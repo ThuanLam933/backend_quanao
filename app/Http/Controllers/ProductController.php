@@ -467,6 +467,34 @@ class ProductController extends Controller
             return response()->json(['message' => 'Lỗi server'], 500);
         }
     }
+    public function show($id)
+{
+    try {
+        $product = Product::with(['details.color','details.size'])
+                          ->findOrFail($id);
+
+        // chuẩn hoá url
+        if ($product->image_url && !preg_match('/^https?:\/\//', $product->image_url)) {
+            $product->image_url = asset('storage/' . ltrim($product->image_url, '/'));
+        }
+
+        // chuẩn hoá url cho detail
+        if ($product->details) {
+            $product->details = $product->details->map(function($d){
+                if ($d->image_url && !preg_match('/^https?:\/\//', $d->image_url)) {
+                    $d->image_url = asset('storage/' . ltrim($d->image_url, '/'));
+                }
+                return $d;
+            });
+        }
+
+        return response()->json($product);
+
+    } catch (\Throwable $e) {
+        return response()->json(['message' => 'Product not found'], 404);
+    }
+}
+
 
     /**
      * Helper: lọc headers không cần log (tránh log token nhạy cảm)

@@ -37,7 +37,15 @@ class InventoryController extends Controller
     {
         $perPage = (int) $request->query('per_page', 25);
 
-        $q = InventoryLog::query()->with(['productDetail', 'user']);
+       $q = InventoryLog::query()->with([
+    'productDetail',
+    'productDetail.product',
+    'productDetail.color',
+    'productDetail.size',
+    'user'
+]);
+
+
 
         if ($request->filled('product_detail_id')) {
             $q->where('product_detail_id', $request->query('product_detail_id'));

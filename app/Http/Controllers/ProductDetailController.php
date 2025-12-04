@@ -11,20 +11,65 @@ class ProductDetailController extends Controller
     /**
      * Lấy danh sách product details (public)
      */
-    public function index()
-    {
-        try {
-            $details = Product_detail::with(['color', 'size'])
-                ->orderBy('id', 'desc')
-                ->get(['id', 'product_id', 'color_id', 'size_id', 'price', 'quantity', 'status', 'created_at', 'updated_at']);
+    public function index(Request $request)
+{
+    try {
+        $query = Product_detail::with(['color', 'size', 'product', 'images'])
+            ->orderBy('id', 'desc');
 
-            return response()->json($details);
-        } catch (\Throwable $e) {
-            Log::error('ProductDetail index error: ' . $e->getMessage());
-            Log::error($e->getTraceAsString());
-            return response()->json(['message' => 'Lỗi server'], 500);
+        // ⭐⭐⭐ LỌC THEO product_id
+        if ($request->has('product_id') && $request->product_id != "") {
+            $query->where('product_id', $request->product_id);
         }
+
+        // chạy query sau khi áp dụng filter
+        $details = $query->get([
+            'id',
+            'product_id',
+            'color_id',
+            'size_id',
+            'price',
+            'quantity',
+            'status',
+            'created_at',
+            'updated_at'
+        ]);
+
+        // ======= GIỮ NGUYÊN PHẦN CHUẨN HÓA DỮ LIỆU =======
+        $details->transform(function ($d) {
+            if ($d->relationLoaded('images') && $d->images) {
+                $d->images = collect($d->images)->map(function ($img) {
+                    $full = $img->full_url ?? $img->url ?? null;
+                    if (!$full && !empty($img->url_image)) {
+                        $full = preg_match('/^https?:\\/\\//i', $img->url_image)
+                            ? $img->url_image
+                            : url('storage/' . ltrim($img->url_image, '/'));
+                    }
+                    $img->full_url = $full;
+                    return $img;
+                })->values()->toArray();
+            } else {
+                $d->images = [];
+            }
+
+            if ($d->product && !empty($d->product->image_url)) {
+                if (!preg_match('/^https?:\\/\\//i', $d->product->image_url)) {
+                    $d->product->image_url = url('storage/' . ltrim($d->product->image_url, '/'));
+                }
+            }
+
+            return $d;
+        });
+
+        return response()->json($details);
+
+    } catch (\Throwable $e) {
+        Log::error('ProductDetail index error: ' . $e->getMessage());
+        Log::error($e->getTraceAsString());
+        return response()->json(['message' => 'Lỗi server'], 500);
     }
+}
+
 
     /**
      * Lấy chi tiết một product detail theo id (public)
@@ -32,7 +77,29 @@ class ProductDetailController extends Controller
     public function show($id)
     {
         try {
-            $detail = Product_detail::with(['color', 'size'])->findOrFail($id);
+            $detail = Product_detail::with(['color', 'size', 'product', 'images'])->findOrFail($id);
+
+            // add full_url for images (if available)
+            if ($detail->relationLoaded('images') && $detail->images) {
+                $detail->images = collect($detail->images)->map(function ($img) {
+                    $full = $img->full_url ?? $img->url ?? null;
+                    if (!$full && !empty($img->url_image)) {
+                        $full = preg_match('/^https?:\\/\\//i', $img->url_image)
+                            ? $img->url_image
+                            : url('storage/' . ltrim($img->url_image, '/'));
+                    }
+                    $img->full_url = $full;
+                    return $img;
+                })->values()->toArray();
+            } else {
+                $detail->images = [];
+            }
+
+            // normalize product.image_url
+            if ($detail->product && !empty($detail->product->image_url) && !preg_match('/^https?:\\/\\//i', $detail->product->image_url)) {
+                $detail->product->image_url = url('storage/' . ltrim($detail->product->image_url, '/'));
+            }
+
             return response()->json($detail);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['message' => 'Product detail không tồn tại'], 404);
@@ -76,7 +143,7 @@ class ProductDetailController extends Controller
                 'color_id'   => $validated['color_id'] ?? null,
                 'size_id'    => $validated['size_id'] ?? null,
                 'price'      => array_key_exists('price', $validated) ? $validated['price'] : null,
-                'quantity'   => $validated['quantity'] ?? 0,
+                'quantity' => 0,
                 'status'     => array_key_exists('status', $validated) ? $validated['status'] : 1,
             ];
 

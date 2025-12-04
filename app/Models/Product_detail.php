@@ -27,10 +27,15 @@ class Product_detail extends Model
         return $this->belongsTo(Size::class);
     }
 
-    // === NEW === relation to the parent product
+    // relation to the parent product
     public function product()
     {
-        // assumes you have App\Models\Product model; adjust namespace if different
         return $this->belongsTo(\App\Models\Product::class, 'product_id');
+    }
+
+    // ⭐⭐ relation to images (MISSING → đã thêm)
+    public function images()
+    {
+        return $this->hasMany(\App\Models\ImageProduct::class, 'product_detail_id');
     }
 }

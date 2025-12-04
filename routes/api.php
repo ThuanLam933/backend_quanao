@@ -28,7 +28,10 @@ Route::post('/login', [UserController::class, 'login']);
 Route::get('/users', [UserController::class, 'getAll']);
 
 // Public product + attributes
+
 Route::get('/products', [ProductController::class, 'products']);
+Route::get('/products/{id}', [ProductController::class, 'show']);
+
 Route::post('/products', [ProductController::class, 'addProduct']); // nếu muốn, chuyển vào admin
 Route::post('/products/{id}', [ProductController::class, 'update']);
 Route::delete('/products/{id}', [ProductController::class, 'destroy']);
@@ -84,6 +87,7 @@ Route::middleware('auth:api')->group(function () {
     // Product details (protected)
     Route::post('/product-details', [ProductDetailController::class, 'store']);
     Route::put('/product-details/{id}', [ProductDetailController::class, 'update']);
+    Route::patch('/product-details/{id}', [ProductDetailController::class, 'update']);
     Route::delete('/product-details/{id}', [ProductDetailController::class, 'destroy']);
 
     // Colors & Sizes
@@ -100,6 +104,9 @@ Route::middleware('auth:api')->group(function () {
     | Orders
     |--------------------------------------------------------------------------
     */
+
+    // ⭐ Thêm mới: đơn hàng của user hiện tại
+    Route::get('/my-orders', [OrderController::class, 'myOrders']);
 
     // Create order
     Route::get('/orders', [OrderController::class, 'index']);

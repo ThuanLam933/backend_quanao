@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('phone');
             $table->string('address');
             $table->text('note');
-            $table->decimal('total_price');
+            $table->decimal('total_price',12,2) ->unsigned();
             $table->tinyInteger('status_stock')->default('1');
             $table->enum('payment_method', ['Cash','Banking'])->default('Banking');            
             $table->enum('status', ['pending','confirmed', 'shipping','returned','completed','cancelled'])->default('pending');
