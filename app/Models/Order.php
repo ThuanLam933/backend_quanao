@@ -29,4 +29,11 @@ class Order extends Model
     {
         return $this->belongsTo(Discount::class);
     }
+    public function items()
+{
+    return $this->hasMany(\App\Models\OrderDetail::class, 'order_id');
+}
+
+
+
 }

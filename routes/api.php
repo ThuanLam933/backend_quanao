@@ -10,10 +10,11 @@ use App\Http\Controllers\SizeController;
 use App\Http\Controllers\ProductDetailController;
 use App\Http\Controllers\ImageProductController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\OrderDetailController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ReceiptController;
-use App\Http\Controllers\InventoryController; // <-- added
-use App\Http\Controllers\ReturnRequestController; // <-- returns controller (new)
+use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\ReturnRequestController;
 
 /*
 |--------------------------------------------------------------------------
@@ -21,54 +22,45 @@ use App\Http\Controllers\ReturnRequestController; // <-- returns controller (new
 |--------------------------------------------------------------------------
 */
 
+// Auth
 Route::post('/register', [UserController::class, 'register']);
-Route::post('/login', [UserController::class, 'login']);
+Route::post('/login',    [UserController::class, 'login']);
 
-// Public user list (controller tự check admin)
+// Public users list (controller tự check admin)
 Route::get('/users', [UserController::class, 'getAll']);
 
-// Public product + attributes
+// Products
+Route::get('/products',        [ProductController::class, 'products']);
+Route::get('/products/{id}',   [ProductController::class, 'show']);
+Route::post('/products',       [ProductController::class, 'addProduct']);
+Route::post('/products/{id}',  [ProductController::class, 'update']);
+Route::delete('/products/{id}',[ProductController::class, 'destroy']);
 
-Route::get('/products', [ProductController::class, 'products']);
-Route::get('/products/{id}', [ProductController::class, 'show']);
-
-Route::post('/products', [ProductController::class, 'addProduct']); // nếu muốn, chuyển vào admin
-Route::post('/products/{id}', [ProductController::class, 'update']);
-Route::delete('/products/{id}', [ProductController::class, 'destroy']);
-
-Route::get('/product-details', [ProductDetailController::class, 'index']);
+// Product details
+Route::get('/product-details',      [ProductDetailController::class, 'index']);
 Route::get('/product-details/{id}', [ProductDetailController::class, 'show']);
 
-// Categories (public read)
-Route::get('/categories', [CategoriesController::class, 'index']);
-Route::get('/categories/{id}', [CategoriesController::class, 'show']);
+// Categories
+Route::get('/categories',         [CategoriesController::class, 'index']);
+Route::get('/categories/{id}',    [CategoriesController::class, 'show']);
 
-Route::get('/colors', [ColorController::class, 'index']);
-Route::get('/colors/{id}', [ColorController::class, 'show']);
-Route::get('/sizes', [SizeController::class, 'index']);
-Route::get('/sizes/{id}', [SizeController::class, 'show']);
+// Colors & Sizes
+Route::get('/colors',       [ColorController::class, 'index']);
+Route::get('/colors/{id}',  [ColorController::class, 'show']);
+Route::get('/sizes',        [SizeController::class, 'index']);
+Route::get('/sizes/{id}',   [SizeController::class, 'show']);
 
 // Images
-Route::get('/image-products', [ImageProductController::class, 'index']);
-Route::post('/image-products', [ImageProductController::class, 'store']);
-Route::get('/image-products/{id}', [ImageProductController::class, 'show']);
+Route::get('/image-products',         [ImageProductController::class, 'index']);
+Route::post('/image-products',        [ImageProductController::class, 'store']);
+Route::get('/image-products/{id}',    [ImageProductController::class, 'show']);
 Route::match(['put','patch','post'], '/image-products/{id}', [ImageProductController::class, 'update']);
 Route::delete('/image-products/{id}', [ImageProductController::class, 'destroy']);
 
-/*
-|--------------------------------------------------------------------------
-| RETURNS (Exchange / Return requests)
-|--------------------------------------------------------------------------
-|
-| Public: index + show (admin/front-end may require auth; controller can
-|         perform additional permission checks).
-| Authenticated: store / update / destroy (protected by auth:api).
-|
-*/
-
-// Public read routes for returns
-Route::get('/returns', [ReturnRequestController::class, 'index']);
+// Returns (public read)
+Route::get('/returns',    [ReturnRequestController::class, 'index']);
 Route::get('/returns/{id}', [ReturnRequestController::class, 'show']);
+
 
 /*
 |--------------------------------------------------------------------------
@@ -78,26 +70,28 @@ Route::get('/returns/{id}', [ReturnRequestController::class, 'show']);
 
 Route::middleware('auth:api')->group(function () {
 
-    // Auth user info
-    Route::post('/logout', [UserController::class, 'logout']);
+    // User actions
+    Route::post('/logout',  [UserController::class, 'logout']);
     Route::post('/refresh', [UserController::class, 'refresh']);
-    Route::get('/me',        [UserController::class, 'me']);
-    Route::put('/me',        [UserController::class, 'updateMe']);
+    Route::get('/me',       [UserController::class, 'me']);
+    Route::put('/me',       [UserController::class, 'updateMe']);
+    Route::put('/change-password', [UserController::class, 'changePassword']);
 
     // Product details (protected)
-    Route::post('/product-details', [ProductDetailController::class, 'store']);
-    Route::put('/product-details/{id}', [ProductDetailController::class, 'update']);
-    Route::patch('/product-details/{id}', [ProductDetailController::class, 'update']);
-    Route::delete('/product-details/{id}', [ProductDetailController::class, 'destroy']);
+    Route::post('/product-details',          [ProductDetailController::class, 'store']);
+    Route::put('/product-details/{id}',      [ProductDetailController::class, 'update']);
+    Route::patch('/product-details/{id}',    [ProductDetailController::class, 'update']);
+    Route::delete('/product-details/{id}',   [ProductDetailController::class, 'destroy']);
 
-    // Colors & Sizes
-    Route::post('/colors', [ColorController::class, 'store']);
-    Route::put('/colors/{id}', [ColorController::class, 'update']);
-    Route::delete('/colors/{id}', [ColorController::class, 'destroy']);
+    // Colors
+    Route::post('/colors',       [ColorController::class, 'store']);
+    Route::put('/colors/{id}',   [ColorController::class, 'update']);
+    Route::delete('/colors/{id}',[ColorController::class, 'destroy']);
 
-    Route::post('/sizes', [SizeController::class, 'store']);
-    Route::put('/sizes/{id}', [SizeController::class, 'update']);
-    Route::delete('/sizes/{id}', [SizeController::class, 'destroy']);
+    // Sizes
+    Route::post('/sizes',       [SizeController::class, 'store']);
+    Route::put('/sizes/{id}',   [SizeController::class, 'update']);
+    Route::delete('/sizes/{id}',[SizeController::class, 'destroy']);
 
     /*
     |--------------------------------------------------------------------------
@@ -105,107 +99,84 @@ Route::middleware('auth:api')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    // ⭐ Thêm mới: đơn hàng của user hiện tại
+    // User's own orders
     Route::get('/my-orders', [OrderController::class, 'myOrders']);
 
-    // Create order
-    Route::get('/orders', [OrderController::class, 'index']);
-    Route::post('/orders', [OrderController::class, 'store']);
-
-    // Show order (owner or admin, controller check)
+    // CRUD orders
+    Route::get('/orders',      [OrderController::class, 'index']);
+    Route::post('/orders',     [OrderController::class, 'store']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
-
-    // List orders (admin only, controller check)
-
-    // CRUD (admin)
     Route::put('/orders/{id}', [OrderController::class, 'update']);
     Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
 
-    // admin lấy tất cả orders (bạn đã dùng trong AdminPanel)
+    // Admin all orders (used in admin panel)
     Route::get('/orders-all', [OrderController::class, 'getAll']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Order Details (NEW)
+    |--------------------------------------------------------------------------
+    */
+
+    Route::apiResource('order-details', OrderDetailController::class);
 
     /*
     |--------------------------------------------------------------------------
     | Categories (protected)
     |--------------------------------------------------------------------------
     */
-    Route::post('/categories', [CategoriesController::class, 'store']);
-    Route::put('/categories/{id}', [CategoriesController::class, 'update']);
-    Route::patch('/categories/{id}', [CategoriesController::class, 'update']);
-    Route::delete('/categories/{id}', [CategoriesController::class, 'destroy']);
+
+    Route::post('/categories',              [CategoriesController::class, 'store']);
+    Route::put('/categories/{id}',          [CategoriesController::class, 'update']);
+    Route::patch('/categories/{id}',        [CategoriesController::class, 'update']);
+    Route::delete('/categories/{id}',       [CategoriesController::class, 'destroy']);
 
     /*
     |--------------------------------------------------------------------------
-    | Returns (protected write routes)
+    | Returns (protected write)
     |--------------------------------------------------------------------------
     */
-    Route::post('/returns', [ReturnRequestController::class, 'store']);
-    Route::put('/returns/{id}', [ReturnRequestController::class, 'update']);
-    Route::delete('/returns/{id}', [ReturnRequestController::class, 'destroy']);
+
+    Route::post('/returns',              [ReturnRequestController::class, 'store']);
+    Route::put('/returns/{id}',          [ReturnRequestController::class, 'update']);
+    Route::delete('/returns/{id}',       [ReturnRequestController::class, 'destroy']);
 });
+
 
 /*
 |--------------------------------------------------------------------------
-| ADMIN ROUTES (auth + /admin prefix)
+| ADMIN ROUTES (auth + prefix /admin)
 |--------------------------------------------------------------------------
-|
-| These routes require authentication. You can also apply additional
-| middleware (e.g. role:admin) if you want to restrict to admin users.
-|
 */
 
 Route::middleware('auth:api')->prefix('admin')->group(function () {
 
     // Users
-    Route::get('/users', [UserController::class, 'getAll']);
+    Route::get('/users',  [UserController::class, 'getAll']);
     Route::post('/users', [UserController::class, 'createByAdmin']);
 
-    // Orders (admin view)
-    Route::get('/orders', [OrderController::class, 'index']);
-    Route::put('/orders/{id}', [OrderController::class, 'update']);
-    Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
+    // Orders
+    Route::get('/orders',        [OrderController::class, 'index']);
+    Route::put('/orders/{id}',   [OrderController::class, 'update']);
+    Route::delete('/orders/{id}',[OrderController::class, 'destroy']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Suppliers (CRUD)
-    |--------------------------------------------------------------------------
-    */
+    // Suppliers
     Route::apiResource('suppliers', SupplierController::class);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Receipts (phiếu nhập kho)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/receipts', [ReceiptController::class, 'index']);
-    Route::post('/receipts', [ReceiptController::class, 'store']);
+    // Receipts
+    Route::get('/receipts',           [ReceiptController::class, 'index']);
+    Route::post('/receipts',          [ReceiptController::class, 'store']);
     Route::get('/receipts/{receipt}', [ReceiptController::class, 'show']);
     Route::delete('/receipts/{receipt}', [ReceiptController::class, 'destroy']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Inventory (logs & adjustments)
-    |--------------------------------------------------------------------------
-    |
-    | Endpoints to read inventory logs, do manual adjustments, revert receipts,
-    | and also create log-only entries (for imports).
-    |
-    */
-    Route::get('/inventory/logs', [InventoryController::class, 'index']);               // list / filter logs (paginated)
-    Route::post('/inventory/adjust', [InventoryController::class, 'adjust']);         // manual adjustment (change can be + or -)
-    Route::post('/inventory/logs', [InventoryController::class, 'createLogOnly']);    // create a log entry without changing qty
-    Route::post('/inventory/revert-receipt/{receiptId}', [InventoryController::class, 'revertReceipt']); // revert a receipt (careful)
+    // Inventory
+    Route::get('/inventory/logs',               [InventoryController::class, 'index']);
+    Route::post('/inventory/adjust',            [InventoryController::class, 'adjust']);
+    Route::post('/inventory/logs',              [InventoryController::class, 'createLogOnly']);
+    Route::post('/inventory/revert-receipt/{receiptId}', [InventoryController::class, 'revertReceipt']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Admin returns management (optional - reuse ReturnController)
-    |--------------------------------------------------------------------------
-    |
-    | These admin-prefixed routes point to the same controller but are useful
-    | if you prefer separate admin endpoints / URLs.
-    |
-    */
-    Route::get('/returns', [ReturnRequestController::class, 'index']);
-    Route::put('/returns/{id}', [ReturnRequestController::class, 'update']);
-    Route::delete('/returns/{id}', [ReturnRequestController::class, 'destroy']);
+    // Admin Returns
+    Route::get('/returns',            [ReturnRequestController::class, 'index']);
+    Route::put('/returns/{id}',       [ReturnRequestController::class, 'update']);
+    Route::delete('/returns/{id}',    [ReturnRequestController::class, 'destroy']);
 });

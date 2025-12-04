@@ -57,6 +57,53 @@ class UserController extends Controller
             return response()->json(['message' => 'Server error'], 500);
         }
     }
+    /**
+ * ----------------------------------------------------
+ * Đổi mật khẩu (yêu cầu mật khẩu cũ)
+ * ----------------------------------------------------
+ */
+public function changePassword(Request $request)
+{
+    try {
+        $user = $request->user() ?? JWTAuth::user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        // Validate input
+        $validator = Validator::make($request->all(), [
+            'old_password' => 'required|string',
+            'new_password' => 'required|string|min:6',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Check old password
+        if (!Hash::check($request->old_password, $user->password)) {
+            return response()->json([
+                'message' => 'Mật khẩu cũ không đúng'
+            ], 400);
+        }
+
+        // Update password
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Đổi mật khẩu thành công'
+        ], 200);
+
+    } catch (\Throwable $e) {
+        Log::error('changePassword error: ' . $e->getMessage());
+        return response()->json(['message' => 'Server error'], 500);
+    }
+}
 
 
     /**
