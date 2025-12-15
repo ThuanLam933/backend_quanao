@@ -25,7 +25,11 @@ return new class extends Migration
             $table->decimal('price');
             $table->integer('quantity')->default(0);
             $table->tinyInteger('status')->default(1);
+            $table->foreignId('product_discount_id')
+                ->constrained()
+                ->onDelete('cascade');
             $table->timestamps();
+
         });
     }
 

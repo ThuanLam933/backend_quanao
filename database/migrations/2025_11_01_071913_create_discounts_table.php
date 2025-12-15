@@ -12,17 +12,36 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('discounts', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('type');
-            $table->decimal('min_total');
-            $table->integer('usage_limit');
-            $table->integer('usage_count');
-            $table->tinyInteger('status')->default(1);
-            $table->date('start_date');
-            $table->date('end_date');
-            $table->timestamps();
-        });
+    $table->id();
+
+    // mã giảm giá
+    $table->string('code')->unique();
+
+    $table->string('name')->nullable();
+
+    // % hoặc tiền
+    $table->enum('type', ['percent', 'fixed']);
+
+    // giá trị giảm
+    $table->decimal('value', 12, 2);
+
+    // điều kiện áp dụng
+    $table->decimal('min_total', 12, 2)->nullable();
+
+    // số lần dùng
+    $table->integer('usage_limit')->nullable(); // null = không giới hạn
+    $table->integer('usage_count')->default(0);
+
+    // trạng thái
+    $table->boolean('is_active')->default(true);
+
+    // thời gian áp dụng
+    $table->timestamp('start_at')->nullable();
+    $table->timestamp('end_at')->nullable();
+
+    $table->timestamps();
+});
+
     }
 
     /**

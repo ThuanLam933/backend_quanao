@@ -15,6 +15,8 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ReturnRequestController;
+use App\Http\Controllers\ProductDiscountController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -179,4 +181,17 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::get('/returns',            [ReturnRequestController::class, 'index']);
     Route::put('/returns/{id}',       [ReturnRequestController::class, 'update']);
     Route::delete('/returns/{id}',    [ReturnRequestController::class, 'destroy']);
+
+    /*
+|--------------------------------------------------------------------------
+| Product Discounts (protected)
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/product-discounts',        [ProductDiscountController::class, 'index']);
+Route::post('/product-discounts',       [ProductDiscountController::class, 'store']);
+Route::get('/product-discounts/{id}',   [ProductDiscountController::class, 'show']);
+Route::put('/product-discounts/{id}',   [ProductDiscountController::class, 'update']);
+Route::delete('/product-discounts/{id}',[ProductDiscountController::class, 'destroy']);
+
 });
