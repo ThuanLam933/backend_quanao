@@ -159,10 +159,12 @@ public function show(Request $request, $id)
 
             /* ===== CALCULATE TOTAL ===== */
             $total = 0;
-            foreach ($items as $it) {
-                $pd = Product_detail::find($it['product_detail_id']);
-                $total += $pd->price * $it['quantity'];
-            }
+foreach ($items as $it) {
+    $unitPrice = (int) ($it['unit_price'] ?? 0);
+    $qty = (int) $it['quantity'];
+    $total += $unitPrice * $qty;
+}
+
 
             /* ===== CREATE ORDER ===== */
             $order = Order::create([
@@ -203,7 +205,8 @@ public function show(Request $request, $id)
                     'order_id' => $order->id,
                     'product_detail_id' => $pd->id,
                     'quantity' => $it['quantity'],
-                    'price' => $pd->price,
+                    'price' => $it['unit_price'], // ✅ GIÁ BÁN (final_price)
+
                 ]);
 
                 /* UPDATE STOCK */
