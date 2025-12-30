@@ -16,6 +16,7 @@ use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ReturnRequestController;
 use App\Http\Controllers\ProductDiscountController;
+use App\Http\Controllers\DiscountController;
 
 
 /*
@@ -24,6 +25,8 @@ use App\Http\Controllers\ProductDiscountController;
 |--------------------------------------------------------------------------
 */
 
+Route::post('/vnpay_create_payment', [App\Http\Controllers\VnPayController::class, 'createPayment']);
+Route::get('/vnpay_return', [App\Http\Controllers\VnPayController::class, 'vnpayReturn']);
 // Auth
 Route::post('/register', [UserController::class, 'register']);
 Route::post('/login',    [UserController::class, 'login']);
@@ -62,7 +65,7 @@ Route::delete('/image-products/{id}', [ImageProductController::class, 'destroy']
 // Returns (public read)
 Route::get('/returns',    [ReturnRequestController::class, 'index']);
 Route::get('/returns/{id}', [ReturnRequestController::class, 'show']);
-
+Route::post('/discounts/apply', [DiscountController::class, 'apply']);
 
 /*
 |--------------------------------------------------------------------------
@@ -138,6 +141,8 @@ Route::middleware('auth:api')->group(function () {
     | Returns (protected write)
     |--------------------------------------------------------------------------
     */
+    
+
 
     Route::post('/returns',              [ReturnRequestController::class, 'store']);
     Route::put('/returns/{id}',          [ReturnRequestController::class, 'update']);
@@ -194,4 +199,9 @@ Route::get('/product-discounts/{id}',   [ProductDiscountController::class, 'show
 Route::put('/product-discounts/{id}',   [ProductDiscountController::class, 'update']);
 Route::delete('/product-discounts/{id}',[ProductDiscountController::class, 'destroy']);
 
+Route::get('/discounts',        [DiscountController::class, 'index']);
+Route::post('/discounts',       [DiscountController::class, 'store']);
+Route::get('/discounts/{id}',   [DiscountController::class, 'show']);
+Route::put('/discounts/{id}',   [DiscountController::class, 'update']);
+Route::delete('/discounts/{id}',[DiscountController::class, 'destroy']);
 });
