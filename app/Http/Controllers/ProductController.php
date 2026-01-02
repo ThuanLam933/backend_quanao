@@ -27,14 +27,22 @@ class ProductController extends Controller
                 ->get()
                 ->map(function($p) {
                     // chuẩn hoá image_url
-                    $p->image_url = $p->image_url ? asset('storage/' . ltrim($p->image_url, '/')) : null;
+                    $p->image_url = $p->image_url
+    ? (preg_match('/^https?:\/\//i', $p->image_url)
+        ? $p->image_url
+        : asset('storage/' . ltrim($p->image_url, '/')))
+    : null;
+
 
                     // chuẩn hoá details (map url cho ảnh nếu details có ảnh riêng)
                     if ($p->relationLoaded('details')) {
                         $p->details = $p->details->map(function($d){
                             // nếu detail có đường dẫn ảnh, chuẩn hoá (tuỳ schema)
                             if (isset($d->image_url) && $d->image_url) {
-                                $d->image_url = asset('storage/' . ltrim($d->image_url, '/'));
+                                $d->image_url = preg_match('/^https?:\/\//i', $d->image_url)
+    ? $d->image_url
+    : asset('storage/' . ltrim($d->image_url, '/'));
+
                             }
                             return $d;
                         })->toArray();
@@ -84,7 +92,7 @@ class ProductController extends Controller
             $validated = $request->validate([
                 'name'          => 'required|string|max:255',
                 'slug'          => 'nullable|string|max:255',
-                'description'   => 'required|string',
+                'description'   => 'sometimes|nullable|string',
                 'status'        => 'required|boolean',
                 'categories_id' => 'required|exists:categories,id',
                 // file rules
@@ -140,7 +148,7 @@ class ProductController extends Controller
             $dataToCreate = [
                 'name'          => $validated['name'],
                 'slug'          => $validated['slug'],
-                'description'   => $validated['description'],
+                'description'   => $validated['description'] ?? 'Chưa có mô tả',
                 'status'        => $validated['status'],
                 'categories_id' => $validated['categories_id'],
                 'image_url'     => $validated['image_url'] ?? '',
@@ -246,7 +254,7 @@ class ProductController extends Controller
             DB::rollBack();
             Log::warning('Validation failed while creating product', $e->errors());
             return response()->json([
-                'message' => 'Validation failed',
+                'message' => 'Còn thiếu thông tin',
                 'errors'  => $e->errors(),
             ], 422);
         } catch (\Throwable $e) {
@@ -274,7 +282,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name'          => 'sometimes|required|string|max:255',
             'slug'          => 'nullable|string|max:255',
-            'description'   => 'sometimes|required|string',
+            'description'   => 'sometimes|nullable|string',
             'status'        => 'sometimes|required|boolean',
             'categories_id' => 'sometimes|required|exists:categories,id',
             'image'         => 'sometimes|file|image|max:5120',
@@ -324,9 +332,27 @@ class ProductController extends Controller
 
         DB::beginTransaction();
 
-        // Update product fields
-        $product->fill($validated);
-        $product->save();
+// ✅ 1) Xác định có upload ảnh mới không
+$hasNewImage =
+    ($request->hasFile('image')) ||
+    ($request->hasFile('images') && is_array($request->file('images')) && count($request->file('images')) > 0);
+
+// ✅ 2) Nếu KHÔNG có ảnh mới => KHÔNG update image_url (giữ ảnh cũ)
+if (!$hasNewImage) {
+    unset($validated['image_url']);
+}
+
+// ✅ 3) Nếu có image_url và nó là full URL => convert về path tương đối
+if (!empty($validated['image_url'])) {
+    $validated['image_url'] = preg_replace('#^.*?/storage/#', '', $validated['image_url']);
+}
+
+// ✅ 4) Giờ mới fill + save
+$product->fill($validated);
+$product->save();
+
+
+
 
         // --- Handle details if provided ---
         $detailsInput = $request->input('details', null);
@@ -413,7 +439,12 @@ class ProductController extends Controller
 
         // reload relations and normalize urls
         $product->load('details.color','details.size');
-        $product->image_url = $product->image_url ? asset('storage/' . ltrim($product->image_url, '/')) : null;
+        $product->image_url = $product->image_url
+    ? (preg_match('/^https?:\/\//i', $product->image_url)
+        ? $product->image_url
+        : asset('storage/' . ltrim($product->image_url, '/')))
+    : null;
+
 
         if ($product->relationLoaded('details') && $product->details) {
             $product->details = $product->details->map(function($d){

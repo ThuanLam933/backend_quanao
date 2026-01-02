@@ -138,7 +138,7 @@ class ReceiptController extends Controller
                 'trace'=>$e->getTraceAsString(),
                 'payload' => $data
             ]);
-            return response()->json(['message' => 'Create failed', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Tạo phiếu nhập thất bại', 'error' => $e->getMessage()], 500);
         }
     }
 

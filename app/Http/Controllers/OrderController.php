@@ -233,13 +233,13 @@ if ($discountId) {
 
             if (!$pd) {
                 DB::rollBack();
-                return response()->json(['message' => 'Product detail not found'], 422);
+                return response()->json(['message' => 'Sản phẩm hiện tại đang tạm hết'], 422);
             }
 
             if ($pd->quantity < $it['quantity']) {
                 DB::rollBack();
                 return response()->json([
-                    'message'           => 'Insufficient stock',
+                    'message'           => 'Số lượng kho không đủ',
                     'product_detail_id' => $pd->id,
                 ], 422);
             }

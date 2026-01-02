@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Validation\Rule;
 use App\Models\Product_detail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -149,14 +149,27 @@ class ProductDetailController extends Controller
 
         try {
             $validated = $request->validate([
-                'product_id' => 'required|exists:products,id',
-                'color_id'   => 'sometimes|nullable|exists:colors,id',
-                'size_id'    => 'sometimes|nullable|exists:sizes,id',
-                'price'      => 'sometimes|nullable|numeric|min:0',
-                'quantity'   => 'sometimes|integer|min:0',
-                'status'     => 'sometimes|boolean',
-                'product_discount_id' => 'sometimes|nullable|exists:product_discounts,id',
-            ]);
+    'product_id' => ['required', 'exists:products,id'],
+    'color_id'   => ['required', 'exists:colors,id'],
+    'size_id'    => ['required', 'exists:sizes,id'],
+
+    // chặn trùng combo
+    Rule::unique('product_details')->where(function ($q) use ($request) {
+        return $q->where('product_id', $request->product_id)
+                 ->where('color_id', $request->color_id)
+                 ->where('size_id', $request->size_id);
+    }),
+
+    'price'    => ['required', 'numeric', 'min:0'],
+    'quantity' => ['sometimes', 'integer', 'min:0'],
+    'status'   => ['sometimes', 'boolean'],
+
+    // discount: nên nullable (mình sẽ sửa migration ở phần C)
+    'product_discount_id' => ['nullable', 'exists:product_discounts,id'],
+], [
+    'unique' => 'Biến thể (Màu + Kích cỡ) này đã tồn tại cho sản phẩm.',
+]);
+
 
             Log::info('Validation passed for ProductDetail.store', $validated);
 
@@ -165,7 +178,7 @@ class ProductDetailController extends Controller
                 'color_id'   => $validated['color_id'] ?? null,
                 'size_id'    => $validated['size_id'] ?? null,
                 'price'      => array_key_exists('price', $validated) ? $validated['price'] : null,
-                'quantity' => 0,
+                'quantity' => $validated['quantity'] ?? 0,
                 'status'     => array_key_exists('status', $validated) ? $validated['status'] : 1,
                 'product_discount_id' => $validated['product_discount_id'] ?? null,
             ];
@@ -212,15 +225,25 @@ public function update(Request $request, $id)
         $detail = Product_detail::findOrFail($id);
 
         $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'color_id'   => 'nullable|exists:colors,id',
-            'size_id'    => 'nullable|exists:sizes,id',
-            'price'      => 'nullable|numeric|min:0',
-            'quantity'   => 'integer|min:0',
-            'status'     => 'boolean',
-            // ✅ FIX QUAN TRỌNG
-            'product_discount_id' => 'nullable|exists:product_discounts,id',
-        ]);
+    'product_id' => ['required', 'exists:products,id'],
+    'color_id'   => ['required', 'exists:colors,id'],
+    'size_id'    => ['required', 'exists:sizes,id'],
+
+    // chặn trùng combo, nhưng ignore bản ghi hiện tại
+    Rule::unique('product_details')->where(function ($q) use ($request) {
+        return $q->where('product_id', $request->product_id)
+                 ->where('color_id', $request->color_id)
+                 ->where('size_id', $request->size_id);
+    })->ignore($id),
+
+    'price'    => ['required', 'numeric', 'min:0'],
+    'quantity' => ['sometimes', 'integer', 'min:0'],
+    'status'   => ['sometimes', 'boolean'],
+    'product_discount_id' => ['nullable', 'exists:product_discounts,id'],
+], [
+    'unique' => 'Biến thể (Màu + Kích cỡ) này đã tồn tại cho sản phẩm.',
+]);
+
 
         $detail->update($validated);
 

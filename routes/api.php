@@ -195,9 +195,9 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
 
 Route::get('/product-discounts',        [ProductDiscountController::class, 'index']);
 Route::post('/product-discounts',       [ProductDiscountController::class, 'store']);
-Route::get('/product-discounts/{id}',   [ProductDiscountController::class, 'show']);
-Route::put('/product-discounts/{id}',   [ProductDiscountController::class, 'update']);
-Route::delete('/product-discounts/{id}',[ProductDiscountController::class, 'destroy']);
+Route::get('/product-discounts/{productDiscount}',   [ProductDiscountController::class, 'show']);
+Route::put('/product-discounts/{productDiscount}',   [ProductDiscountController::class, 'update']);
+Route::delete('/product-discounts/{productDiscount}',[ProductDiscountController::class, 'destroy']);
 
 Route::get('/discounts',        [DiscountController::class, 'index']);
 Route::post('/discounts',       [DiscountController::class, 'store']);
