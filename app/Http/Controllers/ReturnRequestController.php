@@ -11,12 +11,7 @@ use Illuminate\Validation\Rule;
 
 class ReturnRequestController extends Controller
 {
-    // KHÔNG dùng middleware nữa, nên không có __construct
-
-    /**
-     * GET /api/returns
-     * Trả về danh sách (hỗ trợ pagination query ?page= & ?per_page=)
-     */
+    
     public function index(Request $request)
     {
         $perPage = (int) $request->get('per_page', 20);
@@ -30,7 +25,7 @@ class ReturnRequestController extends Controller
             'user',
         ])->orderBy('created_at', 'desc');
 
-        // optional filter by status / order_id
+ 
         if ($s = $request->get('status')) {
             $query->where('status', $s);
         }
@@ -38,7 +33,6 @@ class ReturnRequestController extends Controller
             $query->where('order_id', $oid);
         }
 
-        // trả về mảng không phân trang nếu ?all=1
         if ($request->get('all') == '1') {
             return response()->json($query->get());
         }
@@ -47,10 +41,7 @@ class ReturnRequestController extends Controller
         return response()->json($p);
     }
 
-    /**
-     * POST /api/returns
-     * Tạo phiếu trả
-     */
+ 
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -64,7 +55,7 @@ class ReturnRequestController extends Controller
         DB::beginTransaction();
         try {
             $ret = ReturnRequest::create(array_merge($data, [
-                // nếu không dùng auth thì $request->user() sẽ là null
+           
                 'user_id' => $request->user() ? $request->user()->id : null,
                 'status'  => 'pending',
             ]));
@@ -72,7 +63,7 @@ class ReturnRequestController extends Controller
             DB::commit();
 
             return response()->json(
-                // load đúng quan hệ productDetail
+   
                 $ret->load(['order', 'productDetail', 'user']),
                 201
             );
@@ -85,9 +76,6 @@ class ReturnRequestController extends Controller
         }
     }
 
-    /**
-     * GET /api/returns/{id}
-     */
     public function show($id)
     {
         $ret = ReturnRequest::with([
@@ -105,10 +93,6 @@ class ReturnRequestController extends Controller
         return response()->json($ret);
     }
 
-    /**
-     * PUT /api/returns/{id}
-     * Cập nhật (thường dùng để đổi status hoặc admin_note)
-     */
     public function update(Request $request, $id)
     {
         $ret = ReturnRequest::find($id);
@@ -129,9 +113,7 @@ class ReturnRequestController extends Controller
             $ret->admin_note = $data['admin_note'] ?? $ret->admin_note;
             $ret->status     = $newStatus;
 
-            // Nếu admin đổi sang approved và chưa processed -> cập nhật tồn kho (+)
             if ($oldStatus !== 'approved' && $newStatus === 'approved' && ! $ret->processed) {
-                // khóa product_detail để tránh race
                 $pd = Product_detail::lockForUpdate()->find($ret->product_detail_id);
                 if ($pd) {
                     $pd->quantity = $pd->quantity + $ret->quantity;
@@ -153,9 +135,6 @@ class ReturnRequestController extends Controller
         }
     }
 
-    /**
-     * DELETE /api/returns/{id}
-     */
     public function destroy($id)
     {
         $ret = ReturnRequest::find($id);

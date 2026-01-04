@@ -19,7 +19,6 @@ class InventoryLog extends Model
         'note',
     ];
 
-    // relationships
     public function productDetail()
     {
         return $this->belongsTo(\App\Models\Product_detail::class, 'product_detail_id');
@@ -27,13 +26,9 @@ class InventoryLog extends Model
 
     public function user()
     {
-        // adjust namespace if you use a custom user model
         return $this->belongsTo(\App\Models\User::class, 'user_id');
     }
 
-    /**
-     * Optional: helper to create a receipt-type log
-     */
     public static function forReceipt($productDetailId, $change, $before, $after, $receiptId = null, $userId = null, $note = null)
     {
         return static::create([

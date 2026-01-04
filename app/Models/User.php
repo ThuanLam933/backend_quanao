@@ -13,11 +13,7 @@ class User extends Authenticatable implements JWTSubject
 {
     use HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int,string>
-     */
+    
     protected $fillable = [
         'name',
         'email',
@@ -26,30 +22,19 @@ class User extends Authenticatable implements JWTSubject
 
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int,string>
-     */
+   
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string,string>
-     */
+   
     protected $casts = [
         'email_verified_at' => 'datetime',
-        // 'password' => 'hashed', // nếu Laravel của bạn hỗ trợ cast 'hashed' -> bỏ comment; 
-                                  // nếu không, dùng bcrypt() khi tạo user
+        
     ];
 
-    /**
-     * JWTSubject implementation
-     */
+  
     public function getJWTIdentifier()
     {
         return $this->getKey();
@@ -60,25 +45,19 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 
-    /**
-     * One-to-one: User has one Cart
-     */
+  
     public function cart(): HasOne
     {
         return $this->hasOne(Cart::class);
     }
 
-    /**
-     * One-to-many: User has many Reviews
-     */
+  
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
     }
 
-    /**
-     * One-to-many: User has many Orders
-     */
+    
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);

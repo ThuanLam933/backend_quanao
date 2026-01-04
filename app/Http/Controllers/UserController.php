@@ -12,11 +12,7 @@ use Tymon\JWTAuth\Exceptions\JWTException;
 
 class UserController extends Controller
 {
-    /**
-     * ----------------------------------------------------
-     * Helper: Chỉ cho admin truy cập (dùng trong admin routes)
-     * ----------------------------------------------------
-     */
+   
     protected function ensureAdmin()
     {
         try {
@@ -37,11 +33,6 @@ class UserController extends Controller
     }
 
 
-    /**
-     * ----------------------------------------------------
-     * Lấy tất cả user (admin only)
-     * ----------------------------------------------------
-     */
     public function getAll(Request $request)
     {
         // Kiểm tra quyền admin
@@ -57,11 +48,7 @@ class UserController extends Controller
             return response()->json(['message' => 'Server error'], 500);
         }
     }
-    /**
- * ----------------------------------------------------
- * Đổi mật khẩu (yêu cầu mật khẩu cũ)
- * ----------------------------------------------------
- */
+
 public function changePassword(Request $request)
 {
     try {
@@ -71,7 +58,7 @@ public function changePassword(Request $request)
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        // Validate input
+    
         $validator = Validator::make($request->all(), [
             'old_password' => 'required|string',
             'new_password' => 'required|string|min:6',
@@ -84,14 +71,14 @@ public function changePassword(Request $request)
             ], 422);
         }
 
-        // Check old password
+     
         if (!Hash::check($request->old_password, $user->password)) {
             return response()->json([
                 'message' => 'Mật khẩu cũ không đúng'
             ], 400);
         }
 
-        // Update password
+      
         $user->password = Hash::make($request->new_password);
         $user->save();
 
@@ -106,11 +93,7 @@ public function changePassword(Request $request)
 }
 
 
-    /**
-     * ----------------------------------------------------
-     * Update thông tin user hiện tại
-     * ----------------------------------------------------
-     */
+    
     public function updateMe(Request $request)
     {
         try {
@@ -145,11 +128,7 @@ public function changePassword(Request $request)
     }
 
 
-    /**
-     * ----------------------------------------------------
-     * Register user — mặc định role=user
-     * ----------------------------------------------------
-     */
+   
     public function register(Request $request)
     {
         try {
@@ -192,14 +171,9 @@ public function changePassword(Request $request)
     }
 
 
-    /**
-     * ----------------------------------------------------
-     * Admin-only: tạo user
-     * ----------------------------------------------------
-     */
     public function createByAdmin(Request $request)
     {
-        // Kiểm tra quyền admin
+      
         $check = $this->ensureAdmin();
         if ($check) return $check;
 
@@ -232,12 +206,6 @@ public function changePassword(Request $request)
         }
     }
 
-
-    /**
-     * ----------------------------------------------------
-     * Login
-     * ----------------------------------------------------
-     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -265,11 +233,7 @@ public function changePassword(Request $request)
     }
 
 
-    /**
-     * ----------------------------------------------------
-     * Logout
-     * ----------------------------------------------------
-     */
+ 
     public function logout(Request $request)
     {
         try {
@@ -294,11 +258,6 @@ public function changePassword(Request $request)
     }
 
 
-    /**
-     * ----------------------------------------------------
-     * Refresh Token
-     * ----------------------------------------------------
-     */
     public function refresh()
     {
         try {
@@ -316,11 +275,7 @@ public function changePassword(Request $request)
     }
 
 
-    /**
-     * ----------------------------------------------------
-     * Me
-     * ----------------------------------------------------
-     */
+  
     public function me(Request $request)
     {
         try {
@@ -335,10 +290,6 @@ public function changePassword(Request $request)
 
 
 
-
-    /* ====================================================
-       TOKEN HELPERS
-       ==================================================== */
 
     protected function respondWithToken($token)
     {

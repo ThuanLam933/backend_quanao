@@ -14,9 +14,7 @@ use Exception;
 
 class ReceiptController extends Controller
 {
-    /**
-     * List receipts (paginated).
-     */
+   
     public function index(Request $request)
     {
         $perPage = (int) $request->get('per_page', 20);
@@ -35,18 +33,14 @@ class ReceiptController extends Controller
         return $q->paginate($perPage);
     }
 
-    /**
-     * Show one receipt with details
-     */
+   
     public function show(Receipt $receipt)
     {
         $receipt->load(['supplier', 'details.productDetail']);
         return $receipt;
     }
 
-    /**
-     * Create receipt with details.
-     */
+    
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -63,13 +57,13 @@ class ReceiptController extends Controller
 
         DB::beginTransaction();
         try {
-            // Compute total
+          
             $total = 0;
             foreach ($data['items'] as $it) {
                 $total += intval($it['quantity']) * floatval($it['price']);
             }
 
-            // Create receipt
+        
             $receipt = Receipt::create([
                 'user_id' => $userId,
                 'suppliers_id' => $data['suppliers_id'],
@@ -78,7 +72,7 @@ class ReceiptController extends Controller
                 'import_date' => $data['import_date'] ?? now()->toDateString(),
             ]);
 
-            // Process items
+           
             foreach ($data['items'] as $it) {
                 $productDetailId = $it['product_detail_id'];
                 $qty = intval($it['quantity']);
@@ -93,7 +87,7 @@ class ReceiptController extends Controller
                     'subtotal' => $subtotal,
                 ]);
 
-                // LOCK product_detail and increase stock
+       
                 $pd = Product_detail::lockForUpdate()->find($productDetailId);
                 if (! $pd) throw new Exception("Product detail id {$productDetailId} not found");
 
@@ -106,7 +100,7 @@ class ReceiptController extends Controller
 
                 $pd->save();
 
-                // Inventory log
+            
                 InventoryLog::create([
                     'product_detail_id' => $pd->id,
                     'change' => $qty,
@@ -118,7 +112,7 @@ class ReceiptController extends Controller
                     'note' => "Nhập kho từ phiếu #{$receipt->id}",
                 ]);
 
-                // Update parent product status (set to in-stock if any detail > 0)
+  
                 try {
                     if (!empty($pd->product_id)) {
                         $this->refreshProductStockStatus($pd->product_id);
@@ -142,9 +136,6 @@ class ReceiptController extends Controller
         }
     }
 
-    /**
-     * Delete receipt. (no stock rollback by default)
-     */
     public function destroy(Receipt $receipt)
     {
         DB::beginTransaction();
@@ -161,10 +152,6 @@ class ReceiptController extends Controller
         }
     }
 
-    /**
-     * Helper: refresh product.status based on its product_details.
-     * Sets product.status = 1 if any product_detail.quantity > 0, else 0.
-     */
     protected function refreshProductStockStatus($productId)
     {
         if (empty($productId)) return;

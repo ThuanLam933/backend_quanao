@@ -8,9 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 class SizeController extends Controller
 {
-    /**
-     * Lấy danh sách size (public)
-     */
+    
     public function index()
     {
         try {
@@ -23,9 +21,7 @@ class SizeController extends Controller
         }
     }
 
-    /**
-     * Lấy chi tiết một size theo id (public)
-     */
+  
     public function show($id)
     {
         try {
@@ -40,13 +36,10 @@ class SizeController extends Controller
         }
     }
 
-    /**
-     * Tạo mới một size.
-     * Route: POST /api/sizes (thường protected bằng auth:api)
-     */
+  
     public function store(Request $request)
     {
-        // Log request summary (không log dữ liệu nhạy cảm)
+    
         Log::info('store Size called', [
             'path' => $request->path(),
             'method' => $request->method(),
@@ -84,13 +77,10 @@ class SizeController extends Controller
         }
     }
 
-    /**
-     * Cập nhật size.
-     * Route: PUT /api/sizes/{id}
-     */
+   
     public function update(Request $request, $id)
     {
-        // Log request
+     
         Log::info('update Size called', [
             'path' => $request->path(),
             'method' => $request->method(),
@@ -129,10 +119,7 @@ class SizeController extends Controller
         }
     }
 
-    /**
-     * Xóa size.
-     * Route: DELETE /api/sizes/{id}
-     */
+   
     public function destroy($id)
     {
         Log::info('destroy Size called', ['id' => $id]);
@@ -151,9 +138,7 @@ class SizeController extends Controller
         }
     }
 
-    /**
-     * Helper: lọc headers không cần log (tránh log token nhạy cảm)
-     */
+  
     protected function filterHeadersForLog(array $headers): array
     {
         $sensitive = [

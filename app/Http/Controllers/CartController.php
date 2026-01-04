@@ -9,9 +9,6 @@ use Illuminate\Support\Facades\Auth;
 
 class CartController extends Controller
 {
-    /**
-     * Lấy danh sách carts (optionally filter by ?user_id=...)
-     */
     public function index(Request $request): JsonResponse
     {
         $query = Cart::query();
@@ -25,9 +22,6 @@ class CartController extends Controller
         return response()->json($carts);
     }
 
-    /**
-     * Lấy chi tiết 1 cart
-     */
     public function show($id): JsonResponse
     {
         $cart = Cart::with('user')->find($id);
@@ -39,19 +33,11 @@ class CartController extends Controller
         return response()->json($cart);
     }
 
-    /**
-     * Tạo cart mới.
-     * Nếu user đã login -> gán user_id, nếu guest -> user_id = null
-     */
     public function store(Request $request): JsonResponse
     {
         try {
-            // Dùng Auth::id() thay vì auth()->id() để tránh cảnh báo static analyzer
-            $userId = $request->input('user_id'); // null nếu guest
-
-            // NOTE: dùng tên cột đúng theo migration của bạn.
-            // Nếu migration dùng 'Total_price' (viết hoa T) thì giữ nguyên,
-            // nếu migration dùng 'total_price' hãy sửa lại cho nhất quán.
+            $userId = $request->input('user_id'); 
+        
             $cart = Cart::create([
                 'Total_price' => $request->input('Total_price', 0),
                 'user_id' => $userId,
@@ -66,9 +52,7 @@ class CartController extends Controller
         }
     }
 
-    /**
-     * Cập nhật cart (ví dụ cập nhật tổng tiền hoặc user_id)
-     */
+    
     public function update(Request $request, $id): JsonResponse
     {
         $cart = Cart::find($id);
@@ -77,7 +61,6 @@ class CartController extends Controller
         }
 
         $data = $request->only(['Total_price', 'user_id']);
-        // Nếu Total_price được gửi là số hay chuỗi, có thể cast/validate trước khi save
         if (array_key_exists('Total_price', $data)) {
             $cart->Total_price = $data['Total_price'];
         }
@@ -90,9 +73,6 @@ class CartController extends Controller
         return response()->json($cart);
     }
 
-    /**
-     * Xóa cart
-     */
     public function destroy($id): JsonResponse
     {
         $cart = Cart::find($id);

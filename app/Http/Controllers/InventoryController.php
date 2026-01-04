@@ -13,37 +13,24 @@ use Exception;
 
 class InventoryController extends Controller
 {
-    /**
-     * Constructor: apply auth middleware if you want.
-     */
+   
     public function __construct()
     {
-        // uncomment if you use auth
-        // $this->middleware('auth:api');
+        
     }
 
-    /**
-     * List inventory logs with optional filters and pagination.
-     *
-     * Query params:
-     * - product_detail_id
-     * - type (receipt|sale|adjustment|revert_receipt|...)
-     * - related_id
-     * - date_from
-     * - date_to
-     * - per_page
-     */
+  
     public function index(Request $request)
     {
         $perPage = (int) $request->query('per_page', 25);
 
-       $q = InventoryLog::query()->with([
-    'productDetail',
-    'productDetail.product',
-    'productDetail.color',
-    'productDetail.size',
-    'user'
-]);
+        $q = InventoryLog::query()->with([
+            'productDetail',
+            'productDetail.product',
+            'productDetail.color',
+            'productDetail.size',
+            'user'
+        ]);
 
 
 
@@ -65,24 +52,11 @@ class InventoryController extends Controller
 
         $q->orderByDesc('created_at');
 
+
         return response()->json($q->paginate($perPage), 200);
     }
 
-    /**
-     * Manual adjustment endpoint.
-     * Accepts:
-     * {
-     *   "product_detail_id": int,
-     *   "change": int, // positive to increase stock, negative to decrease
-     *   "note": string (optional)
-     * }
-     *
-     * This will:
-     * - lock product_detail row
-     * - compute before/after
-     * - update product_detail.quantity
-     * - create InventoryLog with type 'adjustment'
-     */
+   
     public function adjust(Request $request)
     {
         $data = $request->validate([
@@ -101,7 +75,7 @@ class InventoryController extends Controller
             $before = (int) ($pd->quantity ?? 0);
             $after = $before + intval($data['change']);
             if ($after < 0) {
-                // prevent negative stock — business rule, you can change to allow negatives
+               
                 DB::rollBack();
                 return response()->json(['message' => 'Adjustment would produce negative stock'], 422);
             }
@@ -132,17 +106,7 @@ class InventoryController extends Controller
         }
     }
 
-    /**
-     * Revert a receipt: subtract quantities added by a receipt.
-     * Caution: business logic — only call if you want to undo a receipt.
-     *
-     * This will:
-     * - find receipt and its details
-     * - for each detail lock product_detail and subtract quantity
-     * - create InventoryLog entries type 'revert_receipt'
-     *
-     * Returns 200 with logs array.
-     */
+   
     public function revertReceipt(Request $request, $receiptId)
     {
         DB::beginTransaction();
@@ -157,14 +121,12 @@ class InventoryController extends Controller
                 /** @var ReceiptDetail $d */
                 $pd = Product_detail::lockForUpdate()->find($d->product_detail_id);
                 if (! $pd) {
-                    // if product detail missing, skip or throw
                     throw new Exception("Product detail {$d->product_detail_id} not found");
                 }
 
                 $before = (int) ($pd->quantity ?? 0);
                 $after = $before - intval($d->quantity);
                 if ($after < 0) {
-                    // business decision: prevent negative by erroring out
                     DB::rollBack();
                     return response()->json(['message' => "Cannot revert, would produce negative stock for product_detail {$pd->id}"], 422);
                 }
@@ -195,10 +157,6 @@ class InventoryController extends Controller
         }
     }
 
-    /**
-     * Optional: create a log entry without changing product_detail quantity.
-     * Useful for importing historical logs or notes.
-     */
     public function createLogOnly(Request $request)
     {
         $data = $request->validate([

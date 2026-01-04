@@ -84,20 +84,15 @@ class OrderController extends Controller
         return response()->json(['message' => 'Forbidden'], 403);
     }
 
-    // ------------------------------------------
-    // ⭐ FIX: THÊM FULL_URL CHO IMAGES TRONG ORDER
-    // ------------------------------------------
     foreach ($order->items as $item) {
         $pd = $item->productDetail;
 
         if ($pd && $pd->images) {
             $pd->images = collect($pd->images)
                 ->map(function ($img) {
-                    // If already full URL
                     if (preg_match('/^https?:\\/\\//i', $img->url_image)) {
                         $img->full_url = $img->url_image;
                     } else {
-                        // Build Laravel storage URL
                         $img->full_url = url('storage/' . ltrim($img->url_image, '/'));
                     }
 
@@ -105,8 +100,6 @@ class OrderController extends Controller
                 })
                 ->values();
         }
-
-        // Fix main product image URL
         if ($pd && $pd->product && $pd->product->image_url) {
             if (!preg_match('/^https?:\\/\\//i', $pd->product->image_url)) {
                 $pd->product->image_url = url('storage/' . ltrim($pd->product->image_url, '/'));
@@ -124,13 +117,10 @@ class OrderController extends Controller
         'customer.email'   => 'required|email',
         'customer.phone'   => 'required|string',
         'customer.address' => 'required|string',
-
         'items'                     => 'required|array|min:1',
         'items.*.product_detail_id'  => 'required|integer',
         'items.*.quantity'           => 'required|integer|min:1',
-
         'payment.method' => ['required', Rule::in(['cod', 'Cash', 'Banking'])],
-
         'totals.subtotal'             => 'nullable|numeric|min:0',
         'totals.total_after_discount' => 'nullable|numeric|min:0',
         'totals.total'                => 'nullable|numeric|min:0',
@@ -151,8 +141,6 @@ class OrderController extends Controller
         $payload = $request->all();
         $items   = $payload['items'];
         $user    = auth()->user();
-
-        /* ===== CALCULATE SUBTOTAL (sum items) ===== */
         $total = 0;
         foreach ($items as $it) {
             $unitPrice = (float) ($it['unit_price'] ?? 0);
@@ -160,9 +148,6 @@ class OrderController extends Controller
 
             $total += $unitPrice * $qty;
         }
-
-        /* ===== APPLY ORDER DISCOUNT (from FE totals) ===== */
-        /* ===== APPLY DISCOUNT + INCREMENT USAGE (BACKEND) ===== */
 $subtotal = $total;
 $finalTotal = $subtotal;
 
@@ -206,12 +191,11 @@ if ($discountId) {
 
     $finalTotal = max(0, $subtotal - $amountDiscount);
 
-    // ✅ Tăng lượt dùng khi tạo đơn
+    //  Tăng lượt dùng khi tạo đơn
     $discount->increment('usage_count');
 }
 
 
-        /* ===== CREATE ORDER ===== */
         $order = Order::create([
             'user_id'        => $user->id,
             'discount_id'    => $payload['discount_id'] ?? null,
@@ -227,7 +211,7 @@ if ($discountId) {
             'status'         => 'pending',
         ]);
 
-        /* ===== CREATE ORDER DETAILS + STOCK UPDATE ===== */
+     
         foreach ($items as $it) {
             $pd = Product_detail::lockForUpdate()->find($it['product_detail_id']);
 
@@ -244,7 +228,6 @@ if ($discountId) {
                 ], 422);
             }
 
-            /* CREATE ORDER DETAIL */
             OrderDetail::create([
                 'order_id'          => $order->id,
                 'product_detail_id' => $pd->id,
@@ -252,13 +235,11 @@ if ($discountId) {
                 'price'             => $it['unit_price'], // ✅ GIÁ BÁN (final_price)
             ]);
 
-            /* UPDATE STOCK */
             $before       = $pd->quantity;
             $pd->quantity -= $it['quantity'];
             $pd->status   = $pd->quantity > 0 ? 1 : 0;
             $pd->save();
 
-            /* INVENTORY LOG */
             if (class_exists(InventoryLog::class)) {
                 InventoryLog::create([
                     'product_detail_id' => $pd->id,
@@ -278,13 +259,13 @@ if ($discountId) {
             'message' => 'Order created successfully',
             'order'   => $order,
         ], 201);
-    } catch (\Throwable $e) {
-        DB::rollBack();
-        Log::error('Order create error: ' . $e->getMessage());
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                Log::error('Order create error: ' . $e->getMessage());
 
-        return response()->json(['message' => 'Server error'], 500);
-    }
-}
+                return response()->json(['message' => 'Server error'], 500);
+            }
+        }
 
     public function update(Request $request, $id)
     {

@@ -8,13 +8,11 @@ use Illuminate\Support\Facades\Log;
 
 class ColorController extends Controller
 {
-    /**
-     * Lấy danh sách màu (public)
-     */
+    
     public function index()
     {
         try {
-            $colors = Color::orderBy('name')->get(['id', 'name', 'created_at', 'updated_at']);
+            $colors = Color::orderBy('id')->get(['id', 'name', 'created_at', 'updated_at']);
             return response()->json($colors);
         } catch (\Throwable $e) {
             Log::error('Colors index error: ' . $e->getMessage());
@@ -23,9 +21,7 @@ class ColorController extends Controller
         }
     }
 
-    /**
-     * Lấy chi tiết một màu theo id (public)
-     */
+   
     public function show($id)
     {
         try {
@@ -40,13 +36,10 @@ class ColorController extends Controller
         }
     }
 
-    /**
-     * Tạo mới một màu.
-     * Route: POST /api/colors (thường protected bằng auth:api)
-     */
+   
     public function store(Request $request)
     {
-        // Log request summary (không log dữ liệu nhạy cảm)
+       
         Log::info('store Color called', [
             'path' => $request->path(),
             'method' => $request->method(),
@@ -84,13 +77,10 @@ class ColorController extends Controller
         }
     }
 
-    /**
-     * Cập nhật màu.
-     * Route: PUT /api/colors/{id}
-     */
+   
     public function update(Request $request, $id)
     {
-        // Log request
+        
         Log::info('update Color called', [
             'path' => $request->path(),
             'method' => $request->method(),
@@ -129,10 +119,7 @@ class ColorController extends Controller
         }
     }
 
-    /**
-     * Xóa màu.
-     * Route: DELETE /api/colors/{id}
-     */
+    
     public function destroy($id)
     {
         Log::info('destroy Color called', ['id' => $id]);
@@ -151,9 +138,7 @@ class ColorController extends Controller
         }
     }
 
-    /**
-     * Helper: lọc headers không cần log (tránh log token nhạy cảm)
-     */
+    
     protected function filterHeadersForLog(array $headers): array
     {
         $sensitive = [

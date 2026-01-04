@@ -19,12 +19,6 @@ use App\Http\Controllers\ProductDiscountController;
 use App\Http\Controllers\DiscountController;
 
 
-/*
-|--------------------------------------------------------------------------
-| PUBLIC ROUTES (NO AUTH)
-|--------------------------------------------------------------------------
-*/
-
 Route::post('/vnpay_create_payment', [App\Http\Controllers\VnPayController::class, 'createPayment']);
 Route::get('/vnpay_return', [App\Http\Controllers\VnPayController::class, 'vnpayReturn']);
 // Auth

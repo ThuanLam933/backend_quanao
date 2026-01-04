@@ -8,22 +8,18 @@ use Illuminate\Support\Facades\Log;
 
 class ProductDetailController extends Controller
 {
-    /**
-     * Lấy danh sách product details (public)
-     */
+   
     public function index(Request $request)
     {
         try {
-            // ✅ ADD: load discount
+
             $query = Product_detail::with(['color', 'size', 'product', 'images', 'discount'])
                 ->orderBy('id', 'desc');
 
-            // ⭐⭐⭐ LỌC THEO product_id
             if ($request->has('product_id') && $request->product_id != "") {
                 $query->where('product_id', $request->product_id);
             }
 
-            // chạy query sau khi áp dụng filter
             $details = $query->get([
                 'id',
                 'product_id',
@@ -38,7 +34,6 @@ class ProductDetailController extends Controller
                 'updated_at'
             ]);
 
-            // ======= GIỮ NGUYÊN PHẦN CHUẨN HÓA DỮ LIỆU =======
             $details->transform(function ($d) {
                 if ($d->relationLoaded('images') && $d->images) {
                     $d->images = collect($d->images)->map(function ($img) {
@@ -61,7 +56,6 @@ class ProductDetailController extends Controller
                     }
                 }
 
-                // ✅ ADD: tính giá sau giảm (không đụng logic khác)
                 $d->has_discount = false;
                 $d->final_price = $d->price;
 
@@ -82,16 +76,12 @@ class ProductDetailController extends Controller
         }
     }
 
-    /**
-     * Lấy chi tiết một product detail theo id (public)
-     */
     public function show($id)
     {
         try {
-            // ✅ ADD: load discount
+
             $detail = Product_detail::with(['color', 'size', 'product', 'images', 'discount'])->findOrFail($id);
 
-            // add full_url for images (if available)
             if ($detail->relationLoaded('images') && $detail->images) {
                 $detail->images = collect($detail->images)->map(function ($img) {
                     $full = $img->full_url ?? $img->url ?? null;
@@ -106,13 +96,9 @@ class ProductDetailController extends Controller
             } else {
                 $detail->images = [];
             }
-
-            // normalize product.image_url
             if ($detail->product && !empty($detail->product->image_url) && !preg_match('/^https?:\\/\\//i', $detail->product->image_url)) {
                 $detail->product->image_url = url('storage/' . ltrim($detail->product->image_url, '/'));
             }
-
-            // ✅ ADD: tính giá sau giảm
             $detail->has_discount = false;
             $detail->final_price = $detail->price;
 
@@ -131,10 +117,6 @@ class ProductDetailController extends Controller
         }
     }
 
-    /**
-     * Tạo mới product detail
-     * Route: POST /api/product-details
-     */
     public function store(Request $request)
     {
         Log::info('store ProductDetail called', [
@@ -153,7 +135,6 @@ class ProductDetailController extends Controller
     'color_id'   => ['required', 'exists:colors,id'],
     'size_id'    => ['required', 'exists:sizes,id'],
 
-    // chặn trùng combo
     Rule::unique('product_details')->where(function ($q) use ($request) {
         return $q->where('product_id', $request->product_id)
                  ->where('color_id', $request->color_id)
@@ -164,7 +145,6 @@ class ProductDetailController extends Controller
     'quantity' => ['sometimes', 'integer', 'min:0'],
     'status'   => ['sometimes', 'boolean'],
 
-    // discount: nên nullable (mình sẽ sửa migration ở phần C)
     'product_discount_id' => ['nullable', 'exists:product_discounts,id'],
 ], [
     'unique' => 'Biến thể (Màu + Kích cỡ) này đã tồn tại cho sản phẩm.',
@@ -204,11 +184,6 @@ class ProductDetailController extends Controller
         }
     }
 
-    /**
-     * Cập nhật product detail
-     * Route: PUT /api/product-details/{id}
-     */
-    // ================= UPDATE =================
 public function update(Request $request, $id)
 {
     Log::info('update ProductDetail called', [
@@ -261,10 +236,6 @@ public function update(Request $request, $id)
 }
 
 
-    /**
-     * Xóa product detail
-     * Route: DELETE /api/product-details/{id}
-     */
     public function destroy($id)
     {
         Log::info('destroy ProductDetail called', ['id' => $id]);
@@ -279,13 +250,10 @@ public function update(Request $request, $id)
         } catch (\Throwable $e) {
             Log::error('Delete ProductDetail error: ' . $e->getMessage());
             Log::error($e->getTraceAsString());
-            return response()->json(['message' => 'Lỗi server'], 500);
+            return response()->json(['message' => 'Đang có sản phẩm lên đơn hàng'], 500);
         }
     }
 
-    /**
-     * Helper: lọc headers không cần log (tránh log token nhạy cảm)
-     */
     protected function filterHeadersForLog(array $headers): array
     {
         $sensitive = [

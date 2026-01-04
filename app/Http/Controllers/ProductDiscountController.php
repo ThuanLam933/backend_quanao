@@ -7,17 +7,13 @@ use Illuminate\Http\Request;
 
 class ProductDiscountController extends Controller
 {
-    /**
-     * Danh sách discount
-     */
+    
     public function index()
     {
         return ProductDiscount::orderByDesc('id')->get();
     }
 
-    /**
-     * Tạo discount mới
-     */
+    
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -31,17 +27,12 @@ class ProductDiscountController extends Controller
         return ProductDiscount::create($data);
     }
 
-    /**
-     * Xem chi tiết
-     */
+    
     public function show(ProductDiscount $productDiscount)
     {
         return $productDiscount->load('productDetails');
     }
 
-    /**
-     * Cập nhật discount
-     */
     public function update(Request $request, ProductDiscount $productDiscount)
     {
         $data = $request->validate([
@@ -57,9 +48,6 @@ class ProductDiscountController extends Controller
         return $productDiscount;
     }
 
-    /**
-     * Xoá discount
-     */
     public function destroy(ProductDiscount $productDiscount)
     {
         $productDiscount->delete();

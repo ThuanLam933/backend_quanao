@@ -15,9 +15,7 @@ use Illuminate\Support\Facades\Validator;
 
 class ProductController extends Controller
 {
-    /**
-     * Lấy danh sách product (public)
-     */
+    
     public function products()
     {
         try {
@@ -26,23 +24,18 @@ class ProductController extends Controller
                 ->orderBy('id','desc')
                 ->get()
                 ->map(function($p) {
-                    // chuẩn hoá image_url
                     $p->image_url = $p->image_url
-    ? (preg_match('/^https?:\/\//i', $p->image_url)
-        ? $p->image_url
-        : asset('storage/' . ltrim($p->image_url, '/')))
-    : null;
-
-
-                    // chuẩn hoá details (map url cho ảnh nếu details có ảnh riêng)
+                ? (preg_match('/^https?:\/\//i', $p->image_url)
+                    ? $p->image_url
+                    : asset('storage/' . ltrim($p->image_url, '/')))
+                : null;
                     if ($p->relationLoaded('details')) {
                         $p->details = $p->details->map(function($d){
                             // nếu detail có đường dẫn ảnh, chuẩn hoá (tuỳ schema)
                             if (isset($d->image_url) && $d->image_url) {
                                 $d->image_url = preg_match('/^https?:\/\//i', $d->image_url)
-    ? $d->image_url
-    : asset('storage/' . ltrim($d->image_url, '/'));
-
+                    ? $d->image_url
+                    : asset('storage/' . ltrim($d->image_url, '/'));
                             }
                             return $d;
                         })->toArray();
@@ -50,7 +43,6 @@ class ProductController extends Controller
                         $p->details = [];
                     }
 
-                    // thêm một helper: first_detail để frontend hiển thị nhanh
                     $first = $p->details[0] ?? null;
                     $p->first_detail = $first ? (object)[
                         'price' => $first['price'] ?? null,
@@ -71,10 +63,6 @@ class ProductController extends Controller
     }
 
 
-    /**
-     * Thêm product mới
-     * Route: POST /api/products
-     */
     public function addProduct(Request $request)
     {
         Log::info('addProduct called', [
@@ -88,7 +76,19 @@ class ProductController extends Controller
         Log::debug('Request payload (except image file)', $payload);
 
         try {
-            // Basic validation for product fields (files omitted)
+                        
+            if ($request->hasFile('image')) {
+                $f = $request->file('image');
+                Log::debug('Upload debug', [
+                    'isValid' => $f->isValid(),
+                    'error'   => $f->getError(),
+                    'size'    => $f->getSize(),
+                    'mime'    => $f->getClientMimeType(),
+                    'name'    => $f->getClientOriginalName(),
+                ]);
+            } else {
+                Log::debug('Upload debug: no image in request');
+            }
             $validated = $request->validate([
                 'name'          => 'required|string|max:255',
                 'slug'          => 'nullable|string|max:255',
@@ -100,12 +100,10 @@ class ProductController extends Controller
                 'images'        => 'sometimes|array',
                 'images.*'      => 'file|image|max:5120',
                 'image_url'     => 'sometimes|nullable|string|max:2048',
-                // note: details may be sent as JSON string in multipart requests -> we'll parse below
             ]);
 
             Log::info('Validation passed for addProduct', $validated);
 
-            // Ensure slug exists and is unique
             if (empty($validated['slug'])) {
                 $base = Str::slug($validated['name']);
                 $slug = $base ?: 'p-' . time();
@@ -115,7 +113,6 @@ class ProductController extends Controller
                 }
                 $validated['slug'] = $slug;
             } else {
-                // if provided, ensure uniqueness (append suffix if exists)
                 $base = Str::slug($validated['slug']);
                 $slug = $base ?: Str::slug($validated['name']);
                 $i = 1;
@@ -125,7 +122,6 @@ class ProductController extends Controller
                 $validated['slug'] = $slug;
             }
 
-            // Handle images upload: prefer first uploaded file (images[] or image)
             if ($request->hasFile('images') && is_array($request->file('images'))) {
                 $files = $request->file('images');
                 if (count($files) > 0) {
@@ -144,7 +140,6 @@ class ProductController extends Controller
                 ]);
             }
 
-            // Data to insert for product
             $dataToCreate = [
                 'name'          => $validated['name'],
                 'slug'          => $validated['slug'],
@@ -154,28 +149,19 @@ class ProductController extends Controller
                 'image_url'     => $validated['image_url'] ?? '',
             ];
 
-            // Begin transaction: create product and details atomically
             DB::beginTransaction();
 
-            // create product
-            $product = Product::create($dataToCreate);
-
-            // --- Handle details input (supports JSON array from frontend or top-level single fields) ---
+            $product = Product::create($dataToCreate);   
             $detailsInput = $request->input('details', []);
-
-            // If details was sent as JSON string (common with multipart/form-data), decode it
             if (is_string($detailsInput) && $detailsInput !== '') {
                 $decoded = json_decode($detailsInput, true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                     $detailsInput = $decoded;
                 } else {
-                    // invalid JSON -> log and set to empty
                     Log::warning('Invalid JSON in details field', ['raw' => $detailsInput]);
                     $detailsInput = [];
                 }
             }
-
-            // If no details array provided, but top-level variant fields exist (backward compatibility), build single detail
             $topLevelDetail = [
                 'color_id' => $request->input('color_id', null),
                 'size_id' => $request->input('size_id', null),
@@ -187,10 +173,7 @@ class ProductController extends Controller
             if (empty($detailsInput) && $hasTopLevelDetail) {
                 $detailsInput[] = $topLevelDetail;
             }
-
-            // Validate each detail entry minimally (numeric price, existing color/size optional)
             foreach ($detailsInput as $idx => $dRaw) {
-                // normalize to array
                 $d = is_array($dRaw) ? $dRaw : [];
 
                 $v = Validator::make($d, [
@@ -202,7 +185,6 @@ class ProductController extends Controller
                 ]);
 
                 if ($v->fails()) {
-                    // rollback and return validation error for detail
                     DB::rollBack();
                     Log::warning('Detail validation failed', ['index' => $idx, 'errors' => $v->errors()->toArray()]);
                     return response()->json(['message' => 'Validation failed for product details', 'errors' => $v->errors()], 422);
@@ -215,8 +197,6 @@ class ProductController extends Controller
                     'quantity' => $d['quantity'] ?? 0,
                     'image_url' => $d['image_url'] ?? null,
                 ];
-
-                // create via relation so product_id is set automatically
                 if (method_exists($product, 'details')) {
                     $product->details()->create($detailData);
                 } else {
@@ -226,12 +206,8 @@ class ProductController extends Controller
             }
 
             DB::commit();
-
-            // reload relations and format image_url for return
             $product->load('details.color','details.size');
             $product->image_url = $product->image_url ? asset('storage/' . ltrim($product->image_url, '/')) : null;
-
-            // Map details image_url normalization similar to products() method
             if ($product->relationLoaded('details') && $product->details) {
                 $product->details = $product->details->map(function($d){
                     if (isset($d->image_url) && $d->image_url) {
@@ -250,7 +226,6 @@ class ProductController extends Controller
                 'product' => $product,
             ], 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // validation errors from initial product validation
             DB::rollBack();
             Log::warning('Validation failed while creating product', $e->errors());
             return response()->json([
@@ -265,11 +240,6 @@ class ProductController extends Controller
             return response()->json(['message' => 'Lỗi server'], 500);
         }
     }
-
-    /**
-     * Cập nhật product
-     * Accepts: POST with _method=PUT + FormData OR real PUT JSON
-     */
     public function update(Request $request, $id)
 {
     Log::info('updateProduct called', ['id' => $id, 'path' => $request->path(), 'method' => $request->method()]);
@@ -295,7 +265,6 @@ class ProductController extends Controller
             'deleted_detail_ids.*' => 'integer',
         ]);
 
-        // Slug handling: ensure unique excluding current product
         if (isset($validated['slug']) && $validated['slug'] !== null && $validated['slug'] !== '') {
             $base = Str::slug($validated['slug']);
             $slug = $base ?: Str::slug($validated['name'] ?? $product->name);
@@ -305,7 +274,6 @@ class ProductController extends Controller
             }
             $validated['slug'] = $slug;
         } elseif (isset($validated['name']) && (!isset($validated['slug']) || $validated['slug'] === '')) {
-            // generate slug from name if slug not provided
             $base = Str::slug($validated['name']);
             $slug = $base ?: 'p-' . time();
             $i = 1;
@@ -314,8 +282,6 @@ class ProductController extends Controller
             }
             $validated['slug'] = $slug;
         }
-
-        // Handle uploaded images: set first to image_url
         if ($request->hasFile('images') && is_array($request->file('images'))) {
             $files = $request->file('images');
             if (count($files) > 0) {
@@ -332,33 +298,20 @@ class ProductController extends Controller
 
         DB::beginTransaction();
 
-// ✅ 1) Xác định có upload ảnh mới không
-$hasNewImage =
-    ($request->hasFile('image')) ||
-    ($request->hasFile('images') && is_array($request->file('images')) && count($request->file('images')) > 0);
-
-// ✅ 2) Nếu KHÔNG có ảnh mới => KHÔNG update image_url (giữ ảnh cũ)
-if (!$hasNewImage) {
-    unset($validated['image_url']);
-}
-
-// ✅ 3) Nếu có image_url và nó là full URL => convert về path tương đối
-if (!empty($validated['image_url'])) {
-    $validated['image_url'] = preg_replace('#^.*?/storage/#', '', $validated['image_url']);
-}
-
-// ✅ 4) Giờ mới fill + save
-$product->fill($validated);
-$product->save();
-
-
-
-
-        // --- Handle details if provided ---
-        $detailsInput = $request->input('details', null);
+            $hasNewImage =
+                ($request->hasFile('image')) ||
+                ($request->hasFile('images') && is_array($request->file('images')) && count($request->file('images')) > 0);
+            if (!$hasNewImage) {
+                unset($validated['image_url']);
+            }
+            if (!empty($validated['image_url'])) {
+                $validated['image_url'] = preg_replace('#^.*?/storage/#', '', $validated['image_url']);
+            }
+            $product->fill($validated);
+            $product->save();
+            $detailsInput = $request->input('details', null);
 
         if ($detailsInput !== null) {
-            // If details is JSON string (multipart), decode it
             if (is_string($detailsInput) && $detailsInput !== '') {
                 $decoded = json_decode($detailsInput, true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
@@ -368,8 +321,6 @@ $product->save();
                     $detailsInput = [];
                 }
             }
-
-            // If details is not array, normalize to empty array
             if (!is_array($detailsInput)) {
                 $detailsInput = [];
             }
@@ -401,25 +352,19 @@ $product->save();
                     'quantity' => $d['quantity'] ?? 0,
                     'image_url' => $d['image_url'] ?? null,
                 ];
-
-                // If id provided and belongs to this product => update
                 if (!empty($d['id'])) {
                     $detail = $product->details()->where('id', $d['id'])->first();
                     if ($detail) {
                         $detail->update($detailData);
                         $processedIds[] = $detail->id;
                     } else {
-                        // id provided but not found on this product: skip or create new (we skip)
                         Log::warning('Detail id provided but not found for this product (update)', ['detail_id' => $d['id'], 'product_id' => $product->id]);
                     }
                 } else {
-                    // create new detail
                     $new = $product->details()->create($detailData);
                     $processedIds[] = $new->id;
                 }
             }
-
-            // Handle explicit deletions: deleted_detail_ids[]
             $deleted = $request->input('deleted_detail_ids', []);
             if (is_array($deleted) && count($deleted) > 0) {
                 $toDelete = $product->details()->whereIn('id', $deleted)->pluck('id')->toArray();
@@ -427,17 +372,12 @@ $product->save();
                     $product->details()->whereIn('id', $toDelete)->delete();
                 }
             }
-
-            // Optionally: if frontend wants a full replace (all details replaced by provided list),
-            // they can send 'replace_details' = true. In that case, delete details not in processedIds.
             if ($request->boolean('replace_details') && count($processedIds) > 0) {
                 $product->details()->whereNotIn('id', $processedIds)->delete();
             }
         }
 
         DB::commit();
-
-        // reload relations and normalize urls
         $product->load('details.color','details.size');
         $product->image_url = $product->image_url
     ? (preg_match('/^https?:\/\//i', $product->image_url)
@@ -473,15 +413,10 @@ $product->save();
     }
 }
 
-
-    /**
-     * Xoá product
-     */
     public function destroy($id)
     {
         try {
             $product = Product::findOrFail($id);
-            // optionally: delete associated images from storage if needed
             if ($product->image_url) {
                 try {
                     \Storage::disk('public')->delete($product->image_url);
@@ -503,13 +438,9 @@ $product->save();
     try {
         $product = Product::with(['details.color','details.size'])
                           ->findOrFail($id);
-
-        // chuẩn hoá url
         if ($product->image_url && !preg_match('/^https?:\/\//', $product->image_url)) {
             $product->image_url = asset('storage/' . ltrim($product->image_url, '/'));
         }
-
-        // chuẩn hoá url cho detail
         if ($product->details) {
             $product->details = $product->details->map(function($d){
                 if ($d->image_url && !preg_match('/^https?:\/\//', $d->image_url)) {
@@ -526,10 +457,6 @@ $product->save();
     }
 }
 
-
-    /**
-     * Helper: lọc headers không cần log (tránh log token nhạy cảm)
-     */
     protected function filterHeadersForLog(array $headers): array
     {
         $sensitive = [

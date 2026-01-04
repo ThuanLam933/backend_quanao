@@ -23,21 +23,21 @@ return new class extends Migration
                 ->constrained('sizes')
                 ->cascadeOnDelete();
 
-            // giá: nên dùng precision rõ ràng (ví dụ 12,0 cho VNĐ)
+            
             $table->decimal('price', 12, 0)->default(0);
 
             $table->unsignedInteger('quantity')->default(0);
 
-            // status dạng boolean cho đúng validate boolean
+            
             $table->boolean('status')->default(true);
 
-            // discount có thể không áp dụng
+            
             $table->foreignId('product_discount_id')
                 ->nullable()
                 ->constrained('product_discounts')
                 ->nullOnDelete();
 
-            // ✅ chặn trùng biến thể theo combo
+            
             $table->unique(['product_id', 'color_id', 'size_id'], 'uniq_product_color_size');
 
             $table->timestamps();

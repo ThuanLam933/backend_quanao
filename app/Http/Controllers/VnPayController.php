@@ -93,7 +93,7 @@ class VnPayController extends Controller
                 return redirect($frontendUrl . '?' . http_build_query($request->all()));
             }
         } else {
-            // Chữ ký không hợp lệ, cũng redirect về frontend với thông báo lỗi
+        
             return redirect($frontendUrl . '?status=fail&message=Chữ ký không hợp lệ');
         }
     }

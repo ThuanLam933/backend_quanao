@@ -11,11 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class CartDetailController extends Controller
 {
-    /**
-     * Thêm item vào cart của user
-     * POST /api/cart-details
-     * body: { product_detail_id, quantity, price, note? }
-     */
+   
     public function store(Request $request)
     {
         $payload = $request->all();
@@ -38,7 +34,6 @@ class CartDetailController extends Controller
                 ['Total_price' => 0]
             );
 
-            // Nếu đã có product_detail trong cart thì cộng dồn số lượng
             $existing = CartDetail::where('cart_id', $cart->id)
                 ->where('product_detail_id', $validated['product_detail_id'])
                 ->first();
@@ -62,7 +57,7 @@ class CartDetailController extends Controller
                 ]);
             }
 
-            // cập nhật tổng
+            
             $total = CartDetail::where('cart_id', $cart->id)->sum('subtotal');
             $cart->Total_price = $total;
             $cart->save();
@@ -81,11 +76,7 @@ class CartDetailController extends Controller
         }
     }
 
-    /**
-     * Cập nhật item trong cart
-     * PUT /api/cart-details/{id}
-     * body: { quantity?, note? }
-     */
+    
     public function update(Request $request, $id)
     {
         try {
@@ -94,7 +85,6 @@ class CartDetailController extends Controller
 
             $detail = CartDetail::findOrFail($id);
 
-            // ensure detail belongs to user's cart
             $cart = Cart::where('id', $detail->cart_id)->where('user_id', $user->id)->first();
             if (!$cart) return response()->json(['message' => 'Not found or unauthorized'], 404);
 
@@ -112,7 +102,6 @@ class CartDetailController extends Controller
             }
             $detail->save();
 
-            // recalc cart total
             $cart->Total_price = CartDetail::where('cart_id', $cart->id)->sum('subtotal');
             $cart->save();
 
@@ -128,10 +117,7 @@ class CartDetailController extends Controller
         }
     }
 
-    /**
-     * Xóa item khỏi cart
-     * DELETE /api/cart-details/{id}
-     */
+
     public function destroy($id)
     {
         try {

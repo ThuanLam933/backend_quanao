@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('receipts', function (Blueprint $table) {
@@ -20,15 +17,13 @@ return new class extends Migration
                 ->constrained()
                 ->onDelete('cascade');
             $table->string('note');
-            $table->decimal('total_price');
+            $table->unsignedBigInteger('total_price');
             $table->date('import_date');
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
+  
     public function down(): void
     {
         Schema::dropIfExists('receipts');

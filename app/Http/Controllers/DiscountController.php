@@ -10,12 +10,11 @@ use Carbon\Carbon;
 
 class DiscountController extends Controller
 {
-    // GET /discounts
+ 
     public function index(Request $request)
     {
         $q = Discount::query();
 
-        // filter/search optional
         if ($request->filled('search')) {
             $s = $request->search;
             $q->where(function ($qq) use ($s) {
@@ -33,7 +32,7 @@ class DiscountController extends Controller
         return response()->json($discounts);
     }
 
-    // POST /discounts
+   
     public function store(Request $request)
 {
     $data = $request->validate([
@@ -68,13 +67,11 @@ class DiscountController extends Controller
 }
 
 
-    // GET /discounts/{id}
     public function show(Discount $discount)
     {
         return response()->json($discount);
     }
 
-    // PUT/PATCH /discounts/{id}
     public function update(Request $request, Discount $discount)
     {
         $data = $request->validate([
@@ -89,7 +86,6 @@ class DiscountController extends Controller
             'end_at'      => ['sometimes', 'nullable', 'date'],
         ]);
 
-        // nếu có start/end thì validate quan hệ after_or_equal
         $start = $data['start_at'] ?? $discount->start_at;
         $end   = $data['end_at'] ?? $discount->end_at;
         if ($start && $end && strtotime($end) < strtotime($start)) {
@@ -114,7 +110,6 @@ class DiscountController extends Controller
         ]);
     }
 
-    // DELETE /discounts/{id}
     public function destroy(Discount $discount)
     {
         $discount->delete();
@@ -124,11 +119,6 @@ class DiscountController extends Controller
         ]);
     }
 
-    /**
-     * Áp mã giảm giá theo code (ví dụ dùng ở checkout)
-     * POST /discounts/apply
-     * body: { code: "...", total: 123456 }
-     */
     public function apply(Request $request)
 {
     $data = $request->validate([
@@ -169,17 +159,15 @@ class DiscountController extends Controller
         return response()->json(['message' => 'Mã giảm giá đã hết lượt sử dụng'], 422);
     }
 
-    // Tính tiền giảm
     $value = (float) $discount->value;
     $amountDiscount = 0;
 
     if ($discount->type === 'percent') {
         $amountDiscount = $total * ($value / 100);
-    } else { // fixed
+    } else { 
         $amountDiscount = $value;
     }
 
-    // Không cho giảm quá tổng
     $amountDiscount = max(0, min($amountDiscount, $total));
     $totalAfter = max(0, $total - $amountDiscount);
 
@@ -196,10 +184,6 @@ class DiscountController extends Controller
 }
 
 
-    /**
-     * Toggle active/inactive
-     * PATCH /discounts/{id}/toggle
-     */
     public function toggle(Discount $discount)
     {
         $discount->is_active = !$discount->is_active;
