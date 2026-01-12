@@ -121,6 +121,7 @@ class OrderController extends Controller
         'items.*.product_detail_id'  => 'required|integer',
         'items.*.quantity'           => 'required|integer|min:1',
         'payment.method' => ['required', Rule::in(['cod', 'Cash', 'Banking'])],
+        'status_method' => ['nullable', 'integer', 'in:0,1'],
         'totals.subtotal'             => 'nullable|numeric|min:0',
         'totals.total_after_discount' => 'nullable|numeric|min:0',
         'totals.total'                => 'nullable|numeric|min:0',
@@ -207,6 +208,7 @@ if ($discountId) {
             'note'           => $payload['note'] ?? '',
             'total_price'    => $finalTotal,
             'payment_method' => $payload['payment']['method'] === 'cod' ? 'Cash' : 'Banking',
+            'status_method'  => $payload['payment']['method'] === 'cod' ? 0 : 1,
             'status_stock'   => 1,
             'status'         => 'pending',
         ]);

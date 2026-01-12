@@ -49,6 +49,26 @@ class InventoryController extends Controller
         if ($request->filled('date_to')) {
             $q->whereDate('created_at', '<=', $request->query('date_to'));
         }
+        if ($request->filled('q')) {
+            $keyword = trim($request->query('q'));
+
+            $q->where(function ($w) use ($keyword) {
+                $w->whereHas('productDetail.product', function ($p) use ($keyword) {
+                    $p->where('name', 'like', "%{$keyword}%");
+                })
+                ->orWhereHas('productDetail.color', function ($c) use ($keyword) {
+                    $c->where('name', 'like', "%{$keyword}%");
+                })
+                ->orWhereHas('productDetail.size', function ($s) use ($keyword) {
+                    $s->where('name', 'like', "%{$keyword}%");
+                });
+                if (is_numeric($keyword)) {
+                    $w->orWhere('related_id', (int)$keyword);
+                }
+            });
+        }
+
+
 
         $q->orderByDesc('created_at');
 
