@@ -119,17 +119,18 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::post('/inventory/logs',              [InventoryController::class, 'createLogOnly']);
     Route::post('/inventory/revert-receipt/{receiptId}', [InventoryController::class, 'revertReceipt']);
 
-   
+    Route::put('/exchanges/{id}',  [App\Http\Controllers\ExchangeController::class, 'update']);
+    Route::patch('/exchanges/{id}',[App\Http\Controllers\ExchangeController::class, 'update']);
 
-Route::get('/product-discounts',        [ProductDiscountController::class, 'index']);
-Route::post('/product-discounts',       [ProductDiscountController::class, 'store']);
-Route::get('/product-discounts/{productDiscount}',   [ProductDiscountController::class, 'show']);
-Route::put('/product-discounts/{productDiscount}',   [ProductDiscountController::class, 'update']);
-Route::delete('/product-discounts/{productDiscount}',[ProductDiscountController::class, 'destroy']);
+    Route::get('/product-discounts',        [ProductDiscountController::class, 'index']);
+    Route::post('/product-discounts',       [ProductDiscountController::class, 'store']);
+    Route::get('/product-discounts/{productDiscount}',   [ProductDiscountController::class, 'show']);
+    Route::put('/product-discounts/{productDiscount}',   [ProductDiscountController::class, 'update']);
+    Route::delete('/product-discounts/{productDiscount}',[ProductDiscountController::class, 'destroy']);
 
-Route::get('/discounts',        [DiscountController::class, 'index']);
-Route::post('/discounts',       [DiscountController::class, 'store']);
-Route::get('/discounts/{id}',   [DiscountController::class, 'show']);
-Route::put('/discounts/{id}',   [DiscountController::class, 'update']);
-Route::delete('/discounts/{id}',[DiscountController::class, 'destroy']);
+    Route::get('/discounts',        [DiscountController::class, 'index']);
+    Route::post('/discounts',       [DiscountController::class, 'store']);
+    Route::get('/discounts/{id}',   [DiscountController::class, 'show']);
+    Route::put('/discounts/{id}',   [DiscountController::class, 'update']);
+    Route::delete('/discounts/{id}',[DiscountController::class, 'destroy']);
 });

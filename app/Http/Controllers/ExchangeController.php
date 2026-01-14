@@ -30,6 +30,34 @@ class ExchangeController extends Controller
         $exchanges = Exchange::with('exchangeDetails')->where('user_id', $userId)->get();
         return response()->json($exchanges);
     }
+    public function update(Request $request, $id)
+    {
+        $exchange = Exchange::find($id);
+        if (!$exchange) {
+            return response()->json(['message' => 'Exchange not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|in:pending,approved,rejected,in_transit,completed,cancelled',
+            'note'   => 'nullable|string',
+        ]);
+
+        // cập nhật các field được phép
+        if (isset($validated['status'])) {
+            $exchange->status = $validated['status'];
+        }
+        if (array_key_exists('note', $validated)) {
+            $exchange->note = $validated['note'] ?? '';
+        }
+
+        $exchange->save();
+
+        return response()->json([
+            'message' => 'Cập nhật exchange thành công.',
+            'exchange' => $exchange->load('exchangeDetails'),
+        ]);
+    }
+
     
     /**
      * API tạo báo cáo đổi trả sản phẩm
