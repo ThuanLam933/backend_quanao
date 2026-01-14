@@ -14,7 +14,7 @@ use App\Http\Controllers\OrderDetailController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\InventoryController;
-use App\Http\Controllers\ReturnRequestController;
+
 use App\Http\Controllers\ProductDiscountController;
 use App\Http\Controllers\DiscountController;
 
@@ -48,8 +48,7 @@ Route::post('/image-products',        [ImageProductController::class, 'store']);
 Route::get('/image-products/{id}',    [ImageProductController::class, 'show']);
 Route::match(['put','patch','post'], '/image-products/{id}', [ImageProductController::class, 'update']);
 Route::delete('/image-products/{id}', [ImageProductController::class, 'destroy']);
-Route::get('/returns',    [ReturnRequestController::class, 'index']);
-Route::get('/returns/{id}', [ReturnRequestController::class, 'show']);
+
 Route::post('/discounts/apply', [DiscountController::class, 'apply']);
 Route::middleware('auth:api')->group(function () {
 
@@ -78,6 +77,13 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::put('/orders/{id}', [OrderController::class, 'update']);
     Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
+
+    //exchanges
+    Route::get('/exchanges',     [App\Http\Controllers\ExchangeController::class, 'index']);
+    Route::post('/exchanges',     [App\Http\Controllers\ExchangeController::class, 'store']);
+    Route::get('/exchanges/{id}', [App\Http\Controllers\ExchangeController::class, 'show']);
+    Route::get('/user-exchanges/{userId}', [App\Http\Controllers\ExchangeController::class, 'userExchanges']);
+
     Route::get('/orders-all', [OrderController::class, 'getAll']);
 
 
@@ -88,9 +94,7 @@ Route::middleware('auth:api')->group(function () {
     Route::patch('/categories/{id}',        [CategoriesController::class, 'update']);
     Route::delete('/categories/{id}',       [CategoriesController::class, 'destroy']);
     
-    Route::post('/returns',              [ReturnRequestController::class, 'store']);
-    Route::put('/returns/{id}',          [ReturnRequestController::class, 'update']);
-    Route::delete('/returns/{id}',       [ReturnRequestController::class, 'destroy']);
+   
 });
 
 
@@ -115,9 +119,7 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::post('/inventory/logs',              [InventoryController::class, 'createLogOnly']);
     Route::post('/inventory/revert-receipt/{receiptId}', [InventoryController::class, 'revertReceipt']);
 
-    Route::get('/returns',            [ReturnRequestController::class, 'index']);
-    Route::put('/returns/{id}',       [ReturnRequestController::class, 'update']);
-    Route::delete('/returns/{id}',    [ReturnRequestController::class, 'destroy']);
+   
 
 Route::get('/product-discounts',        [ProductDiscountController::class, 'index']);
 Route::post('/product-discounts',       [ProductDiscountController::class, 'store']);
