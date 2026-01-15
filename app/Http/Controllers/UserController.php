@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
-
+use App\Models\EmailOtp;
 class UserController extends Controller
 {
    
@@ -127,7 +127,45 @@ public function changePassword(Request $request)
         }
     }
 
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'otp' => 'required|string',
+            'new_password' => 'required|string|min:6',
+        ]);
 
+        $emailOtp = EmailOtp::where('email', $request->email)
+            ->where('otp', $request->otp)
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (!$emailOtp) {
+            return response()->json([
+                'status' => false,
+                'message' => 'OTP không hợp lệ hoặc đã hết hạn'
+            ], 400);
+        }
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Người dùng không tồn tại'
+            ], 404);
+        }
+
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        // Xoá OTP sau khi sử dụng
+        $emailOtp->delete();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Đặt lại mật khẩu thành công'
+        ]);
+    }
    
     public function register(Request $request)
     {
@@ -324,5 +362,57 @@ public function changePassword(Request $request)
         } catch (\Throwable $e) {
             return 3600; // fallback 1h
         }
+    }
+    public function sendOtpResetPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Email không tồn tại'
+            ], 404);
+        }
+
+        $otp = rand(100000, 999999);
+        EmailOtp::updateOrCreate(
+            ['email' => $request->email],
+            [
+                'otp' => $otp,
+                'expires_at' => now()->addMinutes(5),
+            ]
+        );
+
+        \App\Jobs\SendOtpMail::dispatch($request->email, $otp);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'OTP đã được gửi đến email',
+        ]);
+    }
+    public function sendOtp(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email|unique:users,email',
+        ]);
+        Log::info('Sending OTP to email: ' . $request->email);
+        $otp = rand(100000, 999999);
+        EmailOtp::updateOrCreate(
+            ['email' => $request->email],
+            [
+                'otp' => $otp,
+                'expires_at' => now()->addMinutes(5),
+            ]
+        );
+
+        \App\Jobs\SendOtpMail::dispatch($request->email, $otp);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'OTP đã được gửi đến email',
+        ]);
     }
 }

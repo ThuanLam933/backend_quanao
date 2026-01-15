@@ -19,8 +19,15 @@ use App\Http\Controllers\ProductDiscountController;
 use App\Http\Controllers\DiscountController;
 
 
+
 Route::post('/vnpay_create_payment', [App\Http\Controllers\VnPayController::class, 'createPayment']);
 Route::get('/vnpay_return', [App\Http\Controllers\VnPayController::class, 'vnpayReturn']);
+
+Route::post('/test-email', [UserController::class, 'testEmail']);
+Route::post('/send-otp',   [UserController::class, 'sendOtpResetPassword']);
+Route::post('/send-otp-register', [UserController::class, 'sendOtp']);
+Route::post('/reset-password', [UserController::class, 'resetPassword']);
+
 Route::post('/register', [UserController::class, 'register']);
 Route::post('/login',    [UserController::class, 'login']);
 Route::get('/users', [UserController::class, 'getAll']);

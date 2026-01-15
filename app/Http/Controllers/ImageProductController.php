@@ -31,37 +31,97 @@ class ImageProductController extends Controller
   
     public function store(Request $request)
     {
+       try {
         $validated = $request->validate([
             'product_detail_id' => ['required', 'integer', 'exists:product_details,id'],
-            // either file upload or url string
-            'image' => ['nullable', 'file', 'image', 'max:5120'], 
-            'url_image' => ['nullable', 'string'],
+
+            // File upload (tối đa 5MB). Có thể đổi image -> mimes nếu bạn muốn siết đuôi.
+            'image' => ['nullable', 'file', 'image', 'max:5120'],
+
+            // URL ảnh (nếu không upload file). Dùng url để tránh chuỗi rỗng / không hợp lệ
+            'url_image' => ['nullable', 'url'],
+
             'sort_order' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
         ]);
-
-        if (!$request->hasFile('image') && empty($validated['url_image'])) {
-            return response()->json(['message' => 'Vui lòng cung cấp file ảnh hoặc url_image'], 422);
-        }
-
-        $path = null;
-        if ($request->hasFile('image')) {
-            $file = $request->file('image');
-            $path = $file->store('uploads/images', 'public'); 
-        } else {
-            $path = $validated['url_image'];
-        }
-
-        $image = ImageProduct::create([
-            'product_detail_id' => $validated['product_detail_id'],
-            'url_image' => $path,
-            'sort_order' => $validated['sort_order'] ?? '',
-            'description' => $validated['description'] ?? '',
+    } catch (ValidationException $e) {
+        Log::warning('ImageProductController@store validation failed', [
+            'errors' => $e->errors(),
+            'hasFile_image' => $request->hasFile('image'),
+            'content_type' => $request->header('Content-Type'),
         ]);
 
-        $image->full_url = $image->url;
+        return response()->json([
+            'success' => false,
+            'message' => 'Dữ liệu không hợp lệ',
+            'errors'  => $e->errors(),
+        ], 422);
+    }
 
-        return response()->json(['success' => true, 'image' => $image], 201);
+    Log::info('ImageProductController@store validated', $validated);
+
+    // 2) Ép điều kiện: phải có file hoặc url_image (sau khi trim)
+    $url = trim($validated['url_image'] ?? '');
+    $hasFile = $request->hasFile('image');
+
+    if (!$hasFile && $url === '') {
+        return response()->json([
+            'success' => false,
+            'message' => 'Vui lòng cung cấp file ảnh hoặc url_image',
+        ], 422);
+    }
+
+    // 3) Debug chi tiết file nếu có upload
+    if ($hasFile) {
+        $file = $request->file('image');
+
+        \Log::info('Image upload debug', [
+            'original_name' => $file->getClientOriginalName(),
+            'original_ext'  => $file->getClientOriginalExtension(),
+            'client_mime'   => $file->getClientMimeType(),
+            'mime'          => $file->getMimeType(),
+            'size_bytes'    => $file->getSize(),
+            'error_code'    => $file->getError(),
+            'is_valid'      => $file->isValid(),
+        ]);
+
+        if (!$file->isValid()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File upload không hợp lệ (PHP upload error)',
+                'error_code' => $file->getError(),
+            ], 422);
+        }
+    }
+
+    // 4) Lưu đường dẫn: nếu upload file thì store, nếu url thì lấy url
+    $path = null;
+
+    if ($hasFile) {
+        $file = $request->file('image');
+
+        // lưu vào storage/app/public/uploads/images
+        $path = $file->store('uploads/images', 'public');
+    } else {
+        $path = $url;
+    }
+
+    // 5) Tạo record
+    $image = ImageProduct::create([
+        'product_detail_id' => $validated['product_detail_id'],
+        'url_image'         => $path,
+        'sort_order'        => $validated['sort_order'] ?? '',
+        'description'       => $validated['description'] ?? '',
+    ]);
+
+    // 6) Nếu model có accessor getUrlAttribute() thì $image->url sẽ ra full url
+    // Gán thêm field trả về cho client (không lưu DB)
+    $image->full_url = $image->url ?? null;
+
+    return response()->json([
+        'success' => true,
+        'image'   => $image,
+    ], 201);
     }
 
     public function show($id)
@@ -76,7 +136,9 @@ class ImageProductController extends Controller
         $img = ImageProduct::findOrFail($id);
 
         $validated = $request->validate([
-            'image' => ['nullable', 'file', 'image', 'max:5120'],
+           // 'image' => ['nullable', 'file', 'image', 'max:15120'],
+           'image' => ['nullable', 'file', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120'],
+
             'url_image' => ['nullable', 'string'],
             'sort_order' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],

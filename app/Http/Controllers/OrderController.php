@@ -272,20 +272,42 @@ if ($discountId) {
     public function update(Request $request, $id)
     {
         $order = Order::find($id);
-        if (!$order) return response()->json(['message'=>'Order not found'],404);
+        if (!$order) return response()->json(['message' => 'Order not found'], 404);
 
         $user = $request->user();
         if (!$user || $user->role !== 'admin') {
-            return response()->json(['message'=>'Forbidden'],403);
+            return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $order->update($request->only('status','payment_method','total_price','note'));
+        $validator = \Validator::make($request->all(), [
+            'status' => ['nullable', Rule::in(['pending', 'confirmed', 'shipping', 'completed', 'cancelled', 'canceled'])],
+            'payment_method' => ['nullable', Rule::in(['Cash', 'Banking'])],
+            'total_price' => ['nullable', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $request->only('status', 'payment_method', 'total_price', 'note');
+
+        
+        if (isset($data['status']) && strtolower($data['status']) === 'completed') {
+            $data['status_method'] = 1; 
+        }
+
+        $order->update($data);
 
         return response()->json([
-            'message'=>'Order updated',
-            'order'=>$order
+            'message' => 'Order updated',
+            'order'   => $order
         ]);
     }
+
 
     public function destroy(Request $request, $id)
     {
