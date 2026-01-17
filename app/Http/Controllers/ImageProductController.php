@@ -6,6 +6,8 @@ use App\Models\ImageProduct;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class ImageProductController extends Controller
 {
@@ -36,7 +38,8 @@ class ImageProductController extends Controller
             'product_detail_id' => ['required', 'integer', 'exists:product_details,id'],
 
             // File upload (tối đa 5MB). Có thể đổi image -> mimes nếu bạn muốn siết đuôi.
-            'image' => ['nullable', 'file', 'image', 'max:5120'],
+            'image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,jfif', 'max:10240'],
+
 
             // URL ảnh (nếu không upload file). Dùng url để tránh chuỗi rỗng / không hợp lệ
             'url_image' => ['nullable', 'url'],
@@ -137,7 +140,8 @@ class ImageProductController extends Controller
 
         $validated = $request->validate([
            // 'image' => ['nullable', 'file', 'image', 'max:15120'],
-           'image' => ['nullable', 'file', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120'],
+           'image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,jfif', 'max:10240'],
+
 
             'url_image' => ['nullable', 'string'],
             'sort_order' => ['nullable', 'string'],

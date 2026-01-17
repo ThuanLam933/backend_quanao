@@ -14,9 +14,11 @@ use App\Http\Controllers\OrderDetailController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\InventoryController;
-
+use App\Http\Controllers\ExchangeController;
 use App\Http\Controllers\ProductDiscountController;
 use App\Http\Controllers\DiscountController;
+use App\Http\Controllers\ReviewController;
+
 
 
 
@@ -55,6 +57,10 @@ Route::post('/image-products',        [ImageProductController::class, 'store']);
 Route::get('/image-products/{id}',    [ImageProductController::class, 'show']);
 Route::match(['put','patch','post'], '/image-products/{id}', [ImageProductController::class, 'update']);
 Route::delete('/image-products/{id}', [ImageProductController::class, 'destroy']);
+
+// Reviews (public)
+Route::get('/products/{productId}/reviews', [ReviewController::class, 'index']);
+
 
 Route::post('/discounts/apply', [DiscountController::class, 'apply']);
 Route::middleware('auth:api')->group(function () {
@@ -101,6 +107,12 @@ Route::middleware('auth:api')->group(function () {
     Route::patch('/categories/{id}',        [CategoriesController::class, 'update']);
     Route::delete('/categories/{id}',       [CategoriesController::class, 'destroy']);
     
+    // Reviews (auth)
+    Route::get('/products/{productId}/my-review', [ReviewController::class, 'myReview']);
+    Route::post('/products/{productId}/reviews', [ReviewController::class, 'store']);
+    Route::patch('/reviews/{id}', [ReviewController::class, 'update']);
+    Route::delete('/reviews/{id}', [ReviewController::class, 'destroy']);
+
    
 });
 
@@ -140,4 +152,7 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
     Route::get('/discounts/{id}',   [DiscountController::class, 'show']);
     Route::put('/discounts/{id}',   [DiscountController::class, 'update']);
     Route::delete('/discounts/{id}',[DiscountController::class, 'destroy']);
+
+    Route::put('/exchanges/{id}',  [ExchangeController::class, 'update']);
+
 });
