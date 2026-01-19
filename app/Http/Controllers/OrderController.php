@@ -251,6 +251,7 @@ if ($discountId) {
                     'type'              => 'order',
                     'related_id'         => $order->id,
                     'user_id'            => $user->id,
+                    'note'               => "Mua  #{$order->id} ",
                 ]);
             }
         }
@@ -271,11 +272,8 @@ if ($discountId) {
 
     public function update(Request $request, $id)
     {
-        $order = Order::find($id);
-        if (!$order) return response()->json(['message' => 'Order not found'], 404);
-
         $user = $request->user();
-        if (!$user || $user->role !== 'admin') {
+        if (!$user || ($user->role ?? '') !== 'admin') {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -293,20 +291,75 @@ if ($discountId) {
             ], 422);
         }
 
-        $data = $request->only('status', 'payment_method', 'total_price', 'note');
+        return DB::transaction(function () use ($request, $id, $user) {
+            // lock order để tránh race condition
+            $order = Order::lockForUpdate()->find($id);
+            if (!$order) {
+                return response()->json(['message' => 'Order not found'], 404);
+            }
 
-        
-        if (isset($data['status']) && strtolower($data['status']) === 'completed') {
-            $data['status_method'] = 1; 
-        }
+            $data = $request->only('status', 'payment_method', 'total_price', 'note');
 
-        $order->update($data);
+            $oldStatus = strtolower($order->status ?? '');
+            $newStatus = isset($data['status']) ? strtolower($data['status']) : $oldStatus;
 
-        return response()->json([
-            'message' => 'Order updated',
-            'order'   => $order
-        ]);
+            // chặn completed (giống UI)
+            if ($oldStatus === 'completed' && $newStatus !== 'completed') {
+                return response()->json(['message' => 'Order completed, cannot update'], 422);
+            }
+
+            // Nếu đổi sang completed -> set paid
+            if (isset($data['status']) && $newStatus === 'completed') {
+                $data['status_method'] = 1;
+            }
+
+            // ====== HOÀN KHO KHI HUỶ ======
+            $cancelStatuses = ['cancelled', 'canceled'];
+
+            // chỉ hoàn kho nếu:
+            // - đang chuyển sang trạng thái huỷ
+            // - trước đó chưa phải huỷ
+            if (isset($data['status']) && in_array($newStatus, $cancelStatuses, true) && !in_array($oldStatus, $cancelStatuses, true)) {
+
+                // lấy items của order
+                $details = OrderDetail::where('order_id', $order->id)->get();
+
+                foreach ($details as $d) {
+                    $qty = (int)($d->quantity ?? 0);
+                    if ($qty <= 0) continue;
+
+                    $pd = Product_detail::lockForUpdate()->find($d->product_detail_id);
+                    if (!$pd) continue;
+
+                    $before = (int)($pd->quantity ?? 0);
+                    $after  = $before + $qty;
+
+                    $pd->quantity = $after;
+                    $pd->status   = $after > 0 ? 1 : 0;
+                    $pd->save();
+
+                    InventoryLog::create([
+                        'product_detail_id' => $pd->id,
+                        'change'            => +$qty,
+                        'quantity_before'   => $before,
+                        'quantity_after'    => $after,
+                        'type'              => 'order_cancel',  // type mới để phân biệt hoàn kho do huỷ
+                        'related_id'         => $order->id,
+                        'user_id'            => $user->id,
+                        'note'               => "Huỷ đơn #{$order->id} hoàn kho",
+                    ]);
+                }
+            }
+
+            $order->update($data);
+
+            return response()->json([
+                'message' => 'Order updated',
+                'order'   => $order
+            ]);
+        });
     }
+
 
 
     public function destroy(Request $request, $id)

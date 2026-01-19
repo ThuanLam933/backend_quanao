@@ -148,7 +148,7 @@ class InventoryController extends Controller
                 $after = $before - intval($d->quantity);
                 if ($after < 0) {
                     DB::rollBack();
-                    return response()->json(['message' => "Cannot revert, would produce negative stock for product_detail {$pd->id}"], 422);
+                    return response()->json(['message' => "Không thể hoàn tác hóa đơn sản phẩm đã được bán, chỉnh tay {$pd->id}"], 422);
                 }
 
                 $pd->quantity = $after;
@@ -162,7 +162,7 @@ class InventoryController extends Controller
                     'type' => 'revert_receipt',
                     'related_id' => $receipt->id,
                     'user_id' => $request->user() ? $request->user()->id : null,
-                    'note' => "Revert receipt #{$receipt->id}",
+                    'note' => "Hoàn tác từ phiếu nhập #{$receipt->id}",
                 ]);
 
                 $resultLogs[] = $log;

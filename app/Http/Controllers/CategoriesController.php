@@ -5,6 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Categories;
 use Illuminate\Support\Facades\Log;
+use App\Models\Product;
+use App\Models\Product_detail;
+use App\Models\OrderDetail;
+use App\Models\InventoryLog;
+use Illuminate\Support\Facades\DB;
+
 
 class CategoriesController extends Controller
 {
@@ -101,18 +107,91 @@ class CategoriesController extends Controller
     {
         try {
             $category = Categories::find($id);
-            if (! $category) {
+            if (!$category) {
                 return response()->json(['message' => 'Category không tồn tại'], 404);
             }
 
-            $category->delete();
+            // Lấy danh sách product thuộc category
+            $productIds = Product::where('categories_id', $id)->pluck('id');
 
-            Log::info('Category deleted ID: ' . $id);
+            // Nếu category chưa có sản phẩm thì xóa OK (hoặc bạn có thể vẫn cấm tùy nghiệp vụ)
+            if ($productIds->isEmpty()) {
+                $category->delete();
 
-            return response()->json(['message' => 'Xóa category thành công!']);
+                Log::info("[CATEGORY_DELETE_OK] category_id={$id} no products");
+                return response()->json(['message' => 'Xóa category thành công!']);
+            }
+
+            // Lấy product_detail ids thuộc các product này
+            $pdIds = Product_detail::whereIn('product_id', $productIds)->pluck('id');
+
+            // ===== 1) CHẶN DO ĐƠN HÀNG =====
+            if ($pdIds->isNotEmpty()) {
+                $hasOrder = OrderDetail::whereIn('product_detail_id', $pdIds)->exists();
+                if ($hasOrder) {
+                    Log::warning("[CATEGORY_DELETE_BLOCKED_BY_ORDER] category_id={$id} reason=order_details_exists");
+                    return response()->json([
+                        'code' => 'CATEGORY_DELETE_BLOCKED_BY_ORDER',
+                        'message' => 'Không thể xóa loại sản phẩm vì có đơn hàng liên quan.'
+                    ], 409);
+                }
+            }
+
+            // ===== 2) CHẶN DO PHIẾU NHẬP / TỒN KHO BIẾN THỂ =====
+            // Cách chặn tối thiểu: chỉ cần biến thể có quantity > 0
+            $hasStockQty = Product_detail::whereIn('product_id', $productIds)
+                ->where('quantity', '>', 0)
+                ->exists();
+
+            if ($hasStockQty) {
+                Log::warning("[CATEGORY_DELETE_BLOCKED_BY_INVENTORY] category_id={$id} reason=variant_quantity_gt_0");
+                return response()->json([
+                    'code' => 'CATEGORY_DELETE_BLOCKED_BY_INVENTORY',
+                    'message' => 'Không thể xóa loại sản phẩm vì có biến thể đã phát sinh tồn kho (phiếu nhập).'
+                ], 409);
+            }
+
+            // Nếu bạn có bảng/log phiếu nhập qua InventoryLog, chặn chặt hơn:
+            // (Giả sử log nhập có type = 'import' hoặc tương tự)
+            if ($pdIds->isNotEmpty() && class_exists(InventoryLog::class)) {
+                $hasImportLog = InventoryLog::whereIn('product_detail_id', $pdIds)
+                    ->whereIn('type', ['import', 'receipt', 'stock_in']) // tùy bạn đang dùng type nào
+                    ->exists();
+
+                if ($hasImportLog) {
+                    Log::warning("[CATEGORY_DELETE_BLOCKED_BY_IMPORT_LOG] category_id={$id} reason=inventory_import_log_exists");
+                    return response()->json([
+                        'code' => 'CATEGORY_DELETE_BLOCKED_BY_IMPORT_LOG',
+                        'message' => 'Không thể xóa loại sản phẩm vì đã có phiếu nhập/tăng kho cho biến thể.'
+                    ], 409);
+                }
+            }
+
+            // ===== Nếu không vướng 2 điều kiện trên =====
+            // Khuyến nghị: KHÔNG xóa cứng category nếu đã có sản phẩm,
+            // mà chuyển trạng thái "ẩn/ngưng hoạt động" để tránh mất dữ liệu.
+            // Nếu bạn vẫn muốn xóa cứng, hãy xóa theo thứ tự trong transaction.
+            return DB::transaction(function () use ($category, $productIds, $pdIds, $id) {
+                // Nếu muốn xóa cứng:
+                // 1) xóa product_details (nếu còn)
+                if ($pdIds->isNotEmpty()) {
+                    Product_detail::whereIn('id', $pdIds)->delete();
+                }
+
+                // 2) xóa products
+                Product::whereIn('id', $productIds)->delete();
+
+                // 3) xóa category
+                $category->delete();
+
+                Log::info("[CATEGORY_DELETE_OK] category_id={$id} deleted_with_products_no_orders_no_inventory");
+                return response()->json(['message' => 'Xóa category thành công!']);
+            });
+
         } catch (\Throwable $e) {
             Log::error('Category delete error: ' . $e->getMessage());
             return response()->json(['message' => 'Lỗi server'], 500);
         }
     }
+
 }

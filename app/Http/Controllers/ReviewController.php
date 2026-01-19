@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class ReviewController extends Controller
 {
@@ -129,6 +130,49 @@ class ReviewController extends Controller
             return response()->json(['message' => 'Không có quyền.'], 403);
         }
 
+        $review->delete();
+
+        return response()->json(['message' => 'Xoá đánh giá thành công.']);
+    }
+    public function adminIndex(Request $request)
+    {
+        // Nếu bạn có role admin, nên check ở đây
+        $user = $request->user();
+        if (($user->role ?? '') !== 'admin') {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $perPage = (int) $request->query('per_page', 50);
+        $perPage = max(1, min($perPage, 100));
+
+        $q = Review::query()
+            ->with([
+                'user:id,name,email',
+                'product:id,name',
+            ])
+            ->orderByDesc('id');
+
+        $p = $q->paginate($perPage);
+
+        return response()->json([
+            'data' => $p->items(),
+            'meta' => [
+                'current_page' => $p->currentPage(),
+                'last_page'    => $p->lastPage(),
+                'per_page'     => $p->perPage(),
+                'total'        => $p->total(),
+            ],
+        ]);
+    }
+
+    public function adminDestroy(Request $request, $id)
+    {
+        $user = $request->user();
+        if (($user->role ?? '') !== 'admin') {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $review = Review::findOrFail($id);
         $review->delete();
 
         return response()->json(['message' => 'Xoá đánh giá thành công.']);

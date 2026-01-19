@@ -110,16 +110,22 @@ public function changePassword(Request $request)
                 'phone' => 'sometimes|string|max:30',
             ];
 
-            $validated = Validator::make($data, $rules);
+            $messages = [
+                'email.unique' => 'Email đã được sử dụng.',
+                'email.email'  => 'Email không hợp lệ.',
+            ];
 
-            if ($validated->fails()) {
-                return response()->json(['message' => 'Validation failed', 'errors' => $validated->errors()], 422);
+            $validator = Validator::make($data, $rules, $messages);
+
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator);
             }
 
-            $user->fill($validated->validated());
+            $user->fill($validator->validated());
             $user->save();
 
             return response()->json($user, 200);
+
 
         } catch (\Throwable $e) {
             Log::error('updateMe error: '.$e->getMessage());
@@ -170,29 +176,41 @@ public function changePassword(Request $request)
     public function register(Request $request)
     {
         try {
-            $data = $request->validate([
+            $data = $request->only(['name','phone','email','password']);
+
+            $rules = [
                 'name'     => 'required|string|max:255',
                 'phone'    => 'nullable|string|max:30',
                 'email'    => 'required|email|unique:users,email',
                 'password' => 'required|string|min:6',
-            ]);
+            ];
 
-            Log::info('Registering user: ' . $data['email']);
+            $messages = [
+                'email.unique' => 'Email đã được sử dụng.',
+                'email.email'  => 'Email không hợp lệ.',
+            ];
+
+            $validator = Validator::make($data, $rules, $messages);
+
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator);
+            }
+
+            $v = $validator->validated();
 
             $user = User::create([
-                'name'     => $data['name'],
-                'email'    => $data['email'],
-                'password' => bcrypt($data['password']),
-                'phone'    => $data['phone'] ?? null,
+                'name'     => $v['name'],
+                'email'    => $v['email'],
+                'password' => bcrypt($v['password']),
+                'phone'    => $v['phone'] ?? null,
                 'role'     => 'user',
                 'status'   => 1,
             ]);
 
-            Log::info('User registered with ID: ' . $user->id);
-
             $token = $this->createTokenForUser($user);
 
             return response()->json([
+                'status'       => true,
                 'message'      => 'Register success',
                 'user'         => $user,
                 'access_token' => $token,
@@ -200,13 +218,12 @@ public function changePassword(Request $request)
                 'expires_in'   => $this->getTtlSeconds(),
             ], 201);
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json(['message' => 'Validation failed', 'errors' => $e->errors()], 422);
         } catch (\Throwable $e) {
             Log::error('Register error: ' . $e->getMessage());
-            return response()->json(['message' => 'Server error'], 500);
+            return response()->json(['status' => false, 'message' => 'Server error'], 500);
         }
     }
+
 
 
     public function createByAdmin(Request $request)
@@ -415,4 +432,20 @@ public function changePassword(Request $request)
             'message' => 'OTP đã được gửi đến email',
         ]);
     }
+    private function validationErrorResponse($validator)
+    {
+        $errors = $validator->errors();
+
+        // Ưu tiên message cho email nếu có
+        $msg = $errors->first('email')
+            ?: $errors->first()
+            ?: 'Dữ liệu không hợp lệ';
+
+        return response()->json([
+            'status' => false,
+            'message' => $msg,
+            'errors' => $errors,
+        ], 422);
+    }
+
 }

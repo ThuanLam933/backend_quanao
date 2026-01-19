@@ -98,15 +98,15 @@ class ExchangeController extends Controller
                             'change' => -$qty,
                             'quantity_before' => $before,
                             'quantity_after' => $after,
-                            'type' => 'exchange_approved',   // type mới
-                            'related_id' => $exchange->id,   // gắn exchange id
+                            'type' => 'exchange_approved',  
+                            'related_id' => $exchange->id,   
                             'user_id' => $userId,
                             
                         ]);
                     }
                 }
 
-                // 2) COMPLETED -> cộng product_old_id
+                //thành công côcng số
                 if ($shouldAddOld) {
                     foreach ($exchange->exchangeDetails as $d) {
                         $qty = (int)($d->quantity ?? 0);
@@ -165,10 +165,7 @@ class ExchangeController extends Controller
 
 
     
-    /**
-     * API tạo báo cáo đổi trả sản phẩm
-     * Chỉ cho phép nếu đơn hàng có trạng thái hoàn thành
-     */
+    
     public function store(Request $request)
     {
         Log::info('Creating product exchange report', ['data' => $request->all()]);
@@ -185,13 +182,13 @@ class ExchangeController extends Controller
             'exchange_details.*.product_new_id' => 'required|exists:product_details,id',
         ]);
 
-        // Kiểm tra trạng thái đơn hàng
+        
         $order = Order::find($validated['order_id']);
         if (!$order || $order->status !== 'completed') {
             return response()->json(['message' => 'Chỉ được đổi trả khi đơn hàng đã hoàn thành.'], 422);
         }
 
-        // Tạo Exchange
+        
         $exchange = Exchange::create([
             'order_id' => $validated['order_id'],
             'user_id' => $validated['user_id'],
@@ -200,7 +197,7 @@ class ExchangeController extends Controller
             'create_exchange' => now(),
         ]);
 
-        // Tạo ExchangeDetail cho từng sản phẩm đổi trả
+
         foreach ($validated['exchange_details'] as $item) {
             ExchangeDetail::create([
                 'exchange_id' => $exchange->id,

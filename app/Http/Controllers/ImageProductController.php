@@ -33,17 +33,20 @@ class ImageProductController extends Controller
   
     public function store(Request $request)
     {
+        Log::info('upload diagnostics', [
+    'content_length' => $request->server('CONTENT_LENGTH'),
+    'post_max_size' => ini_get('post_max_size'),
+    'upload_max_filesize' => ini_get('upload_max_filesize'),
+    'files' => array_keys($request->allFiles()),
+]);
+
        try {
         $validated = $request->validate([
             'product_detail_id' => ['required', 'integer', 'exists:product_details,id'],
-
             // File upload (tối đa 5MB). Có thể đổi image -> mimes nếu bạn muốn siết đuôi.
-            'image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,jfif', 'max:10240'],
-
-
+           'image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,jfif', 'max:102400'],
             // URL ảnh (nếu không upload file). Dùng url để tránh chuỗi rỗng / không hợp lệ
             'url_image' => ['nullable', 'url'],
-
             'sort_order' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
         ]);

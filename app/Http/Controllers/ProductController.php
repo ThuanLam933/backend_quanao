@@ -255,9 +255,9 @@ class ProductController extends Controller
             'description'   => 'sometimes|nullable|string',
             'status'        => 'sometimes|required|boolean',
             'categories_id' => 'sometimes|required|exists:categories,id',
-            'image'         => 'sometimes|file|image|max:5120',
+            'image'         => 'sometimes|file|image|max:102400',
             'images'        => 'sometimes|array',
-            'images.*'      => 'file|image|max:5120',
+            'images.*'      => 'file|image|max:102400',
             'image_url'     => 'sometimes|nullable|string|max:2048',
             // details is intentionally loose; we'll validate each item later
             'details'       => 'sometimes',

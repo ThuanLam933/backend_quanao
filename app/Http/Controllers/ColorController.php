@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Color;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use App\Models\Product_detail;
+use Illuminate\Support\Facades\DB;
+
 
 class ColorController extends Controller
 {
@@ -51,7 +54,7 @@ class ColorController extends Controller
 
         try {
             $validated = $request->validate([
-                'name' => 'required|string|max:255',
+                'name' => 'required|string|max:255|unique:colors,name',
             ]);
 
             Log::info('Validation passed for Color.store', $validated);
@@ -95,7 +98,7 @@ class ColorController extends Controller
             $color = Color::findOrFail($id);
 
             $validated = $request->validate([
-                'name' => 'required|string|max:255',
+                'name' => 'required|string|max:255|unique:colors,name,' . $id,
             ]);
 
             $color->update(['name' => $validated['name']]);
@@ -126,7 +129,42 @@ class ColorController extends Controller
 
         try {
             $color = Color::findOrFail($id);
+
+            // 1) CHẶN: đã có biến thể phát sinh tồn kho (quantity > 0)
+            $hasStock = Product_detail::where('color_id', $id)
+                ->where('quantity', '>', 0)
+                ->exists();
+
+            if ($hasStock) {
+                Log::warning('[COLOR_DELETE_BLOCKED_BY_STOCK]', [
+                    'color_id' => $id,
+                    'reason' => 'product_details.quantity > 0'
+                ]);
+
+                return response()->json([
+                    'code' => 'COLOR_DELETE_BLOCKED_BY_STOCK',
+                    'message' => 'Không thể xóa màu vì đã có biến thể phát sinh tồn kho.'
+                ], 409);
+            }
+
+            // 2) (TÙY CHỌN - KHUYẾN NGHỊ) CHẶN: màu đang được dùng trong biến thể dù quantity = 0
+            // Nếu bạn muốn "chỉ cần chưa có tồn kho thì cho xóa", thì bạn có thể xóa block này.
+            $isUsedByVariants = Product_detail::where('color_id', $id)->exists();
+            if ($isUsedByVariants) {
+                Log::warning('[COLOR_DELETE_BLOCKED_BY_VARIANTS]', [
+                    'color_id' => $id,
+                    'reason' => 'product_details exists'
+                ]);
+
+                return response()->json([
+                    'code' => 'COLOR_DELETE_BLOCKED_BY_VARIANTS',
+                    'message' => 'Không thể xóa màu vì đang được sử dụng bởi biến thể sản phẩm.'
+                ], 409);
+            }
+
+            // OK: cho xóa
             $color->delete();
+
             Log::info('Color deleted', ['color_id' => $id]);
             return response()->json(['message' => 'Đã xóa màu thành công.']);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -137,6 +175,7 @@ class ColorController extends Controller
             return response()->json(['message' => 'Lỗi server'], 500);
         }
     }
+
 
     
     protected function filterHeadersForLog(array $headers): array

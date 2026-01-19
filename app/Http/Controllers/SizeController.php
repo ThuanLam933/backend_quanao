@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Size;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use App\Models\Product_detail;
+
 
 class SizeController extends Controller
 {
@@ -51,7 +53,7 @@ class SizeController extends Controller
 
         try {
             $validated = $request->validate([
-                'name' => 'required|string|max:255',
+                'name' => 'required|string|max:255|unique:sizes,name',
             ]);
 
             Log::info('Validation passed for Size.store', $validated);
@@ -95,7 +97,7 @@ class SizeController extends Controller
             $size = Size::findOrFail($id);
 
             $validated = $request->validate([
-                'name' => 'required|string|max:255',
+                'name' => 'required|string|max:255|unique:sizes,name,' . $id,
             ]);
 
             $size->update(['name' => $validated['name']]);
@@ -126,7 +128,27 @@ class SizeController extends Controller
 
         try {
             $size = Size::findOrFail($id);
+
+            // CHẶN: nếu có biến thể dùng size này và quantity > 0
+            $hasStock = Product_detail::where('size_id', $id)
+                ->where('quantity', '>', 0)
+                ->exists();
+
+            if ($hasStock) {
+                Log::warning('[SIZE_DELETE_BLOCKED_BY_STOCK]', [
+                    'size_id' => $id,
+                    'reason'  => 'product_details.quantity > 0'
+                ]);
+
+                return response()->json([
+                    'code'    => 'SIZE_DELETE_BLOCKED_BY_STOCK',
+                    'message' => 'Không thể xóa size vì đã có biến thể phát sinh tồn kho.'
+                ], 409);
+            }
+
+            // OK: cho xóa
             $size->delete();
+
             Log::info('Size deleted', ['size_id' => $id]);
             return response()->json(['message' => 'Đã xóa size thành công.']);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -137,6 +159,7 @@ class SizeController extends Controller
             return response()->json(['message' => 'Lỗi server'], 500);
         }
     }
+
 
   
     protected function filterHeadersForLog(array $headers): array

@@ -155,4 +155,7 @@ Route::middleware('auth:api')->prefix('admin')->group(function () {
 
     Route::put('/exchanges/{id}',  [ExchangeController::class, 'update']);
 
+    Route::get('/reviews', [ReviewController::class, 'adminIndex']);
+    Route::delete('/reviews/{id}', [ReviewController::class, 'adminDestroy']);
+
 });
