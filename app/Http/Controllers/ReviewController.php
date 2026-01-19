@@ -61,9 +61,10 @@ class ReviewController extends Controller
     {
         $product = Product::findOrFail($productId);
 
+        
         $data = $request->validate([
             'rating'  => ['required', 'integer', 'min:1', 'max:5'],
-            'comment' => ['nullable', 'string', 'max:2000'],
+            'comment' => ['nullable', 'string', ],
         ]);
 
         $existing = Review::query()
@@ -83,7 +84,6 @@ class ReviewController extends Controller
             'product_id' => $product->id,
             'rating' => $data['rating'],
             'comment' => $data['comment'] ?? null,
-            // Vì migration của bạn đang hơi sai default now, controller tự set cho chắc:
             'Date_time_comment' => Carbon::now(),
         ]);
 
@@ -95,7 +95,7 @@ class ReviewController extends Controller
         ], 201);
     }
 
-    // PATCH /api/reviews/{id}
+    
     public function update(Request $request, $id)
     {
         $review = Review::findOrFail($id);
@@ -110,7 +110,7 @@ class ReviewController extends Controller
         ]);
 
         $review->fill($data);
-        $review->Date_time_comment = Carbon::now(); // nếu bạn muốn cập nhật mốc thời gian sửa
+        $review->Date_time_comment = Carbon::now(); 
         $review->save();
 
         $review->load(['user:id,name']);
@@ -121,7 +121,7 @@ class ReviewController extends Controller
         ]);
     }
 
-    // DELETE /api/reviews/{id}
+    
     public function destroy(Request $request, $id)
     {
         $review = Review::findOrFail($id);
