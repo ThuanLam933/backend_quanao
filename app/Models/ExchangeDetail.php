@@ -21,8 +21,21 @@ class ExchangeDetail extends Model
     {
         return $this->belongsTo(Exchange::class);
     }
+
     public function productDetail()
     {
-        return $this->belongsTo(Product_detail::class);
+        return $this->belongsTo(Product_detail::class, 'product_detail_id');
+    }
+
+    
+    public function productOldDetail()
+    {
+        return $this->belongsTo(Product_detail::class, 'product_old_id');
+    }
+
+    
+    public function productNewDetail()
+    {
+        return $this->belongsTo(Product_detail::class, 'product_new_id');
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\Review;
+use Attribute;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -64,7 +65,15 @@ class ReviewController extends Controller
         
         $data = $request->validate([
             'rating'  => ['required', 'integer', 'min:1', 'max:5'],
-            'comment' => ['nullable', 'string', ],
+            'comment' => ['nullable', 'string',
+            function($attribute,$value,$fail){
+                if($value === null || trim($value) === '')return;
+                $words = preg_split('/\s+/u', trim($value),-1 ,PREG_SPLIT_NO_EMPTY);
+                if(count($words)<5){
+                    $fail('sai');
+                }
+            },
+             ],
         ]);
 
         $existing = Review::query()

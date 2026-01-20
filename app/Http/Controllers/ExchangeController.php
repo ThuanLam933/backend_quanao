@@ -15,23 +15,56 @@ use App\Models\InventoryLog;
 class ExchangeController extends Controller
 {
     public function index()
-    {
-        $exchanges = Exchange::with(['exchangeDetails', 'user:id,name,email'])
-        ->orderByDesc('create_exchange')
-        ->orderByDesc('id')
-        ->get();
-        return response()->json($exchanges);
-    }
+{
+    $exchanges = Exchange::with([
+        'user:id,name,email',
+
+        'exchangeDetails.productDetail.product:id,name',
+        'exchangeDetails.productDetail.color:id,name',
+        'exchangeDetails.productDetail.size:id,name',
+        
+        'exchangeDetails.productOldDetail.product:id,name',
+        'exchangeDetails.productOldDetail.color:id,name',
+        'exchangeDetails.productOldDetail.size:id,name',
+        
+        'exchangeDetails.productNewDetail.product:id,name',
+        'exchangeDetails.productNewDetail.color:id,name',
+        'exchangeDetails.productNewDetail.size:id,name',
+    ])
+    ->orderByDesc('create_exchange')
+    ->orderByDesc('id')
+    ->get();
+
+    return response()->json($exchanges);
+}
+
 
     public function show($id)
-    {
-        $exchange = Exchange::with(['exchangeDetails', 'user:id,name,email'])->find($id);
-        if (!$exchange) {
-            return response()->json(['message' => 'Exchange not found'], 404);
-        }
-        
-        return response()->json($exchange);
+{
+    $exchange = Exchange::with([
+        'user:id,name,email',
+
+        'exchangeDetails.productDetail.product:id,name',
+        'exchangeDetails.productDetail.color:id,name',
+        'exchangeDetails.productDetail.size:id,name',
+
+        'exchangeDetails.productOldDetail.product:id,name',
+        'exchangeDetails.productOldDetail.color:id,name',
+        'exchangeDetails.productOldDetail.size:id,name',
+
+        'exchangeDetails.productNewDetail.product:id,name',
+        'exchangeDetails.productNewDetail.color:id,name',
+        'exchangeDetails.productNewDetail.size:id,name',
+    ])->find($id);
+
+    if (!$exchange) {
+        return response()->json(['message' => 'Exchange not found'], 404);
     }
+
+    return response()->json($exchange);
+}
+
+
 
     public function userExchanges($userId)
     {
